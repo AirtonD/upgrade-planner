@@ -75,9 +75,11 @@ def consultar_pacote(nome: str) -> InfoPacote:
         if not _versao_disponivel(arquivos):
             continue
         try:
-            Version(versao)  # descarta versões que não seguem PEP 440
+            v = Version(versao)  # descarta versões que não seguem PEP 440
         except InvalidVersion:
             continue
+        if v.is_prerelease or v.is_devrelease:
+            continue  # alpha/beta/rc/dev nunca deve ser "a maior versão" sugerida
         versoes_validas.append(versao)
     versoes_validas.sort(key=Version)
 
