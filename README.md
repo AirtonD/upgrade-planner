@@ -47,10 +47,10 @@ Essa tomada de decisão é modelada como aresta condicional no `StateGraph` (ver
 | Cliente OSV.dev | `src/vulns.py` | `POST api.osv.dev/v1/query` — CVEs/GHSAs reais por pacote+versão (mesma query serve PyPI e npm) | ✅ implementado e testado contra a API real |
 | Resolvedor de restrições | `src/resolver.py` | Núcleo determinístico: para cada dependência, calcula a maior versão viável e detecta se outra dependência do manifesto trava essa versão; se travar, testa se subir as duas juntas resolve | ✅ implementado, função pura, testada com fixture. **Só PyPI** alimenta o agrupamento "sobe junto" — ver limitações |
 | Orquestração (`StateGraph`) | `src/agent.py` | Liga as ferramentas acima num grafo LangGraph com estado compartilhado e duas arestas condicionais | ✅ implementado, rodado ponta a ponta contra PyPI + OSV.dev reais |
-| Avaliação de risco | `src/prompts.py` | Prompt isolado do fluxo; LLM (Groq) só classifica risco, nunca escreve fato — sem `GROQ_API_KEY` cai num fallback "não avaliado" em vez de quebrar | ✅ implementado; ainda não testado com uma chave real |
+| Avaliação de risco | `src/prompts.py` | Prompt isolado do fluxo; LLM (Groq) só classifica risco, nunca escreve fato — sem `GROQ_API_KEY` cai num fallback "não avaliado" em vez de quebrar | ✅ implementado e testado com `GROQ_API_KEY` real |
 | CLI | `src/main.py` | `python -m src.main <manifesto>` → roda o grafo, escreve `saidas/plano-upgrade.md` | ✅ implementado e testado |
 
-Cada ferramenta acima tem um `if __name__ == "__main__":` com verificação própria (`assert`), rodável com `python -m src.<modulo>` — é assim que cada peça foi validada antes de existir o grafo que as liga.
+Cada ferramenta tem seu próprio self-check (`if __name__ == "__main__":`) — é assim que cada peça foi validada antes de existir o grafo que as liga (comandos na seção "Como executar" abaixo).
 
 ## Fluxo com LangGraph (implementado)
 
@@ -91,38 +91,44 @@ Detalhes em `ARQUITETURA.md`, seção 10.
 
 ## Como executar
 
-### Hoje (ferramentas isoladas, sem LLM)
-
-Cada ferramenta roda e se auto-verifica independente do agente:
+### 1. Instalar
 
 ```bash
 python -m venv .venv
-.venv/Scripts/activate       # Windows
+.venv/Scripts/activate        # Windows — no Linux/Mac: source .venv/bin/activate
 pip install -r requirements.txt
-
-python -m src.parsers        # parseia exemplos/requirements.txt e exemplos/package.json
-python -m src.registries     # consulta PyPI e npm de verdade (rede necessária)
-python -m src.vulns          # consulta o OSV.dev de verdade (rede necessária)
-python -m src.resolver       # resolve conflitos com dados fictícios (sem rede)
+cp .env.example .env          # preencha GROQ_API_KEY (opcional — sem ela, "Risco" fica "não avaliado")
 ```
 
-### O agente completo
+Chave gratuita em [console.groq.com/keys](https://console.groq.com/keys).
+
+### 2. Rodar o agente
 
 ```bash
-cp .env.example .env         # preencha GROQ_API_KEY (opcional — sem ela, "Risco" fica "não avaliado")
-python -m src.main exemplos/requirements.txt   # PyPI
-python -m src.main exemplos/package.json       # npm
+python -m src.main exemplos/requirements.txt   # ecossistema PyPI
+python -m src.main exemplos/package.json       # ecossistema npm
 ```
 
-Isso gera `saidas/plano-upgrade.md` e imprime o plano no terminal. `exemplos/plano-upgrade.md` tem uma cópia de uma execução real (sem `GROQ_API_KEY`, por isso toda linha `Risco:` diz "não avaliado" — ainda não testei o agente com uma chave de verdade).
+Gera `saidas/plano-upgrade.md` e imprime o plano no terminal. **`python -m src.main`, não `python src/main.py`** — o pacote usa imports relativos (`from .agent import executar`), que só resolvem quando o módulo é invocado com `-m`.
 
-### Testes
+### 3. Rodar os testes
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
 `tests/test_agent.py` cobre manifesto vazio, linha malformada, pacote inexistente (404 real contra o PyPI) e o conflito fastapi/pydantic resolvendo em grupo. Só o teste de 404 usa rede — se ela cair, o teste avisa e pula, não falha em silêncio.
+
+### 4. Rodar uma ferramenta isolada (opcional, para depurar)
+
+Cada módulo em `src/` tem seu próprio self-check, útil para testar uma peça sem subir o grafo inteiro:
+
+```bash
+python -m src.parsers        # parseia exemplos/requirements.txt e exemplos/package.json
+python -m src.registries     # consulta PyPI e npm de verdade (rede necessária)
+python -m src.vulns          # consulta o OSV.dev de verdade (rede necessária)
+python -m src.resolver       # resolve conflitos com fixture fictícia (sem rede)
+```
 
 ## Exemplo de entrada
 
@@ -148,7 +154,7 @@ Equivalente npm: [`exemplos/package.json`](exemplos/package.json) — `express`,
 
 ## Exemplo de saída
 
-[`exemplos/plano-upgrade.md`](exemplos/plano-upgrade.md) — gerado de verdade a partir do `exemplos/requirements.txt` acima, rodando contra PyPI e OSV.dev reais (sem `GROQ_API_KEY`, por isso todo `Risco:` diz "não avaliado"; com a chave, essa linha viraria julgamento do modelo):
+[`exemplos/plano-upgrade.md`](exemplos/plano-upgrade.md) — gerado de verdade a partir do `exemplos/requirements.txt` acima, rodando contra PyPI, OSV.dev e Groq (`GROQ_API_KEY` real) reais:
 
 ```markdown
 # Plano de Upgrade — requirements.txt (PyPI)
@@ -156,28 +162,28 @@ Equivalente npm: [`exemplos/package.json`](exemplos/package.json) — `express`,
 
 ## Onda 1 — Urgente
 
-### boto3 1.29.0 → 1.43.50   [minor]
+### boto3 1.29.0 → 1.43.51   [minor]
 Move junto:  boto3==1.29.0 exige botocore<1.33.0,>=1.32.0; botocore==1.29.0 exige urllib3<1.27,>=1.25.4; requests==2.28.1 exige urllib3<1.27,>=1.21.1  [PyPI]
-Risco:       não avaliado — GROQ_API_KEY ausente  [LLM]
+Risco:       O upgrade é de versão minor e não há motivos aparentes para quebrar o projeto.  [LLM]
 ...
 ### fastapi 0.85.0 → 0.139.2   [minor]
 Por quê:     PYSEC-2024-38 — FastAPI is a web framework for building APIs...  [OSV]
 Move junto:  fastapi==0.85.0 exige pydantic!=1.7,...,<2.0.0,>=1.6.2  [PyPI]
-Risco:       não avaliado — GROQ_API_KEY ausente  [LLM]
+Risco:       O upgrade é de versão minor e não há motivos aparentes para quebrar o projeto.  [LLM]
 ### pydantic 1.10.2 → 2.13.4   [major]
 Por quê:     GHSA-mr82-8j83-vxmv, PYSEC-2026-1812 — Pydantic regular expression denial of service  [OSV]
 Move junto:  fastapi==0.85.0 exige pydantic!=1.7,...,<2.0.0,>=1.6.2  [PyPI]
-Risco:       não avaliado — GROQ_API_KEY ausente  [LLM]
+Risco:       O upgrade é de versão major e pode quebrar o projeto devido às mudanças significativas.  [LLM]
 ...
 ## Onda 2 — Seguro (sem CVE, salto pequeno)
 
 ### uvicorn 0.19.0 → 0.51.0   [minor]
-Risco:       não avaliado — GROQ_API_KEY ausente  [LLM]
+Risco:       O upgrade é de versão minor e não há motivos aparentes para quebrar o projeto.  [LLM]
 ```
 
-Arquivo completo (37 linhas) em [`exemplos/plano-upgrade.md`](exemplos/plano-upgrade.md).
+Arquivo completo (37 linhas) em [`exemplos/plano-upgrade.md`](exemplos/plano-upgrade.md). A linha `Risco:` varia com o salto de versão (`minor` → sem motivo aparente; `major` → "pode quebrar... mudanças significativas") — é julgamento real do modelo, não um texto fixo.
 
-Repare que `fastapi` e `pydantic` aparecem no **mesmo grupo**, com "Move junto" explicando por quê — é o resolvedor detectando que `fastapi==0.85.0` trava `pydantic<2.0.0`, e verificando que a versão mais recente do fastapi já libera pydantic 2.x, então as duas sobem juntas. `boto3`/`botocore`/`urllib3`/`requests` viraram um único grupo maior pelo mesmo motivo, encadeado (cada um trava o próximo). Nenhum desses agrupamentos foi programado à mão — saiu do cruzamento real de `requires_dist` de cada pacote.
+`fastapi` e `pydantic` aparecem no **mesmo grupo**, com "Move junto" explicando por quê — é o resolvedor detectando que `fastapi==0.85.0` trava `pydantic<2.0.0`, e verificando que a versão mais recente do fastapi já libera pydantic 2.x, então as duas sobem juntas. `boto3`/`botocore`/`urllib3`/`requests` viraram um único grupo maior pelo mesmo motivo, encadeado (cada um trava o próximo). Nenhum desses agrupamentos foi programado à mão — saiu do cruzamento real de `requires_dist` de cada pacote.
 
 A etiqueta de procedência (`[PyPI]`, `[OSV]`, `[LLM]`) em cada linha está documentada em `ARQUITETURA.md`, seção 9.
 
@@ -189,7 +195,7 @@ O equivalente para npm — [`exemplos/plano-upgrade-npm.md`](exemplos/plano-upgr
 
 - **Groq como provedor de LLM**, via `langchain-groq`.
 - **Resolvedor como função pura, sem rede**: `resolver.py` não chama API nenhuma — recebe dados já buscados por `registries.py`. Isso tornou possível testar o núcleo do agente com fixtures determinísticas, sem depender de rede nem de mock.
-- **Um cliente HTTP por fonte de dado** (`registries.py`, `vulns.py`), cada um com seu próprio `if __name__ == "__main__":` de verificação contra a API real — cada peça foi validada isoladamente antes de existir orquestração.
+- **Um cliente HTTP por fonte de dado** (`registries.py`, `vulns.py`) — cada peça foi validada isoladamente contra a API real antes de existir orquestração.
 - **Etiqueta de procedência na saída**: toda afirmação do plano final é marcada com a fonte (`[PyPI]`, `[OSV]`, `[LLM]`), para que o plano seja auditável linha a linha, não uma caixa preta.
 - **`gerar_plano` não chama o LLM** — é template determinístico em Python; só a linha `Risco:` vem do modelo. Um segundo LLM call reescrevendo o plano inteiro arriscaria alucinar um fato que o estado já tinha correto.
 - **Versão "efetiva" calculada a partir da restrição do manifesto**, não só de pin exato (`==`). `>=1.21.1,<1.27` também gera sugestão de upgrade — a versão comparada é a maior que já satisfaz essa faixa hoje, que é o que o `pip install`/`npm install` de fato resolveria.
@@ -223,6 +229,7 @@ src/
   main.py                   # CLI
 docs/
   prompts.md            # prompts usados no desenvolvimento
+  slides.md              # apresentacao da ideia (2 slides)
 exemplos/
   requirements.txt      # manifesto PyPI, com conflito real
   package.json           # manifesto npm
