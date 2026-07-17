@@ -22,12 +22,12 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 |---|----|----------|-----|----------|--------|
 | ☐ | 1 | Versionamento com branches e commits semânticos | 1,0 | histórico do repo | Branch por etapa + merge `--no-ff` + commits semânticos, em andamento desde 17/07 |
 | ☐ | 2 | Contribuição individual e produtividade | 1,0 | commits ao longo dos dias | Em andamento — só avaliável no fim |
-| ☐ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md e prompts.md escritos; vai crescer com o código |
+| ☐ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md com exemplo de entrada e saída reais; falta suporte a npm |
 | ☐ | 4 | Ideia do projeto e apresentação | 1,0 | `docs/slides.md` | Ideia fechada; slides pendentes |
-| ☐ | 5 | Implementação do agente com LangGraph | 1,0 | `src/agent.py` | Desenhado (seção 6); não implementado |
-| ✔ | 6 | Uso de ferramenta integrada ao agente | 1,0 | `src/registries.py`, `vulns.py`, `resolver.py` | Implementadas e testadas contra API real; falta plugar no grafo (nº 5) |
+| ✔ | 5 | Implementação do agente com LangGraph | 1,0 | `src/agent.py` | `StateGraph` implementado, rodado ponta a ponta contra PyPI + OSV.dev reais (falta testar `avaliar_risco` com `GROQ_API_KEY` real) |
+| ✔ | 6 | Uso de ferramenta integrada ao agente | 1,0 | `src/registries.py`, `vulns.py`, `resolver.py` | Implementadas, testadas contra API real e integradas ao grafo |
 | ✔ | 7 | Cuidados básicos de segurança | 1,0 | `.gitignore`, `.env.example` | `.env` e `*.pdf` no gitignore desde o 1º commit; nenhum segredo versionado |
-| ☐ | 8 | Contexto, memória e validação básica | 2,0 | estado do grafo + Pydantic | Pydantic em todos os modelos de dados + validação de nome de pacote; falta o estado do grafo (`TypedDict`) |
+| ✔ | 8 | Contexto, memória e validação básica | 2,0 | estado do grafo + Pydantic | `EstadoUpgrade` (`TypedDict`) implementado com reducer para `erros`; Pydantic em todos os modelos; validação de tamanho de arquivo, nome de pacote, e specifier inválido |
 
 **Onde a nota realmente está:** critérios 3 e 8 valem 2,0 cada. Documentação + validação = **4 dos 10 pontos**. "O agente funciona" (5 e 6) vale 2,0. Capriche no README e nas validações antes de sofisticar o agente.
 
@@ -41,22 +41,22 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 **Agente**
 - [x] Processo a automatizar definido → planejamento de upgrade de dependências
 - [x] Objetivo, entrada e saída claramente definidos → seção 3
-- [ ] Implementado com LangGraph
-- [ ] Fluxo usa estado, nós e conexões
-- [ ] Executa de forma funcional e gera saída estruturada
+- [x] Implementado com LangGraph
+- [x] Fluxo usa estado, nós e conexões
+- [x] Executa de forma funcional e gera saída estruturada — rodado contra `exemplos/requirements.txt` de verdade
 
 **Ferramentas, contexto e validação**
-- [ ] Pelo menos uma ferramenta integrada *ao agente* (as ferramentas existem e funcionam isoladas — falta o grafo que as integra)
-- [x] A ferramenta executa ação real (não simulada) — `registries.py` e `vulns.py` testados contra API real
-- [ ] Usa contexto ou memória durante a execução (depende do estado do grafo, nº 5)
-- [x] Validação básica de entrada, saída ou uso da ferramenta — Pydantic nos modelos + regex antes de montar URL
+- [x] Pelo menos uma ferramenta integrada ao agente — 3 ferramentas (`registries`, `vulns`, `resolver`) plugadas no grafo
+- [x] A ferramenta executa ação real (não simulada) — testado contra PyPI e OSV.dev reais
+- [x] Usa contexto ou memória durante a execução — `EstadoUpgrade` carrega dados entre todos os nós
+- [x] Validação básica de entrada, saída ou uso da ferramenta — Pydantic nos modelos + regex antes de montar URL + tamanho máximo de arquivo
 - [x] Nenhuma chave/token versionado
 
 **README e prompts**
 - [x] README apresenta problema, objetivo e funcionamento
-- [x] README explica como executar (o que já roda hoje + o que falta)
+- [x] README explica como executar
 - [x] README descreve o fluxo LangGraph e a ferramenta
-- [ ] README traz exemplo de entrada e saída — entrada sim, saída pendente (depende de `src/agent.py`, não fabricar saída falsa)
+- [x] README traz exemplo de entrada e saída — saída real, gerada por uma execução de verdade, não fabricada
 - [x] Principais prompts registrados em `.md` → `docs/prompts.md` (atualizar até o fim)
 
 **Apresentação**
@@ -178,15 +178,16 @@ O `exemplos/requirements.txt` **precisa** ter conflito de verdade — num projet
 ```mermaid
 flowchart TD
     START([manifesto]) --> V[validar_entrada]
-    V -->|inválido| ERRO[gerar_saida: erro]
+    V -->|inválido| ERRO[gerar_saida_erro]
     V -->|válido| P[parsear_manifesto]
-    P --> C[consultar_registry]
+    P -->|sem dependências| ERRO
+    P -->|ok| C[consultar_registry]
     C --> O[consultar_osv]
     O --> D{há CVE ou defasagem?}
-    D -->|não| OK[gerar_saida: tudo em dia]
+    D -->|não| OK[gerar_saida_ok]
     D -->|sim| R[resolver_restricoes]
     R --> A[avaliar_risco - LLM]
-    A --> G[gerar_plano - LLM]
+    A --> G[gerar_plano]
     G --> END([plano-upgrade.md])
     ERRO --> END
     OK --> END
@@ -196,13 +197,17 @@ flowchart TD
 |----|------------------|------|
 | `validar_entrada` | Arquivo existe, formato reconhecido, não vazio, tamanho sane | Não |
 | `parsear_manifesto` | `requirements.txt`/`package.json` → modelo normalizado | Não |
-| `consultar_registry` | **Ferramenta**: PyPI/npm — versões, datas, restrições | Não |
+| `consultar_registry` | **Ferramenta**: PyPI/npm — versões, datas, restrições. Calcula a versão "efetiva" a partir da restrição do manifesto (`==`, `>=`, `~=` ou sem restrição), não só pin exato | Não |
 | `consultar_osv` | **Ferramenta**: OSV.dev — CVEs por pacote+versão | Não |
 | `resolver_restricoes` | **Ferramenta**: maior versão viável + grupos de co-movimento | Não |
 | `avaliar_risco` | Classifica risco de quebra por salto de versão | Sim |
-| `gerar_plano` | Ordena ondas e escreve a narrativa | Sim |
+| `gerar_plano` | Ordena ondas e escreve a narrativa | **Não** — ver abaixo |
 
-**A aresta condicional (`há CVE ou defasagem?`) é o coração do critério 5.** O rubric exige "StateGraph para o controle de fluxo **e tomada de decisão**" — um grafo linear atende só parcialmente. Aqui a decisão é real: sem achado, o agente encerra sem chamar o LLM.
+**Duas arestas condicionais, não uma.** Além de "há CVE ou defasagem?", `validar_entrada` e `parsear_manifesto` também podem encerrar cedo (arquivo ausente/vazio/grande demais, ou nenhuma dependência reconhecível) — evita gastar rede e LLM em entrada inválida.
+
+**A aresta condicional depois de `consultar_osv` é o coração do critério 5.** O rubric exige "StateGraph para o controle de fluxo **e tomada de decisão**" — um grafo linear atende só parcialmente. Aqui a decisão é real: sem achado, o agente encerra sem chamar o LLM.
+
+**Correção de rota: `gerar_plano` não usa o LLM**, ao contrário do desenho original desta seção. É um template determinístico em Python que monta o markdown a partir do estado (`resolucao`, `vulnerabilidades`, `riscos`) — só a linha `Risco:` de cada item vem do `avaliar_risco`. Um segundo LLM call reescrevendo o plano inteiro arriscaria alucinar um fato (versão, CVE) que o estado já tinha correto; a etiqueta de procedência da seção 9 só funciona se `[PyPI]`/`[OSV]` vierem literalmente do estado, nunca de geração de texto.
 
 Separação exigida pelo enunciado (planejar / executar / usar ferramenta / responder): parse e validação preparam, os três nós de ferramenta executam, `avaliar_risco` julga, `gerar_plano` responde. Um nó, um papel.
 
@@ -246,6 +251,8 @@ Casos para `tests/test_agent.py`: manifesto vazio, linha malformada, pacote inex
 ---
 
 ## 9. Formato da saída
+
+> Mockup original de planejamento abaixo. A implementação real (`src/agent.py:gerar_plano`) simplificou: sem tabela "Resumo" separada (as contagens ficam na linha de cabeçalho) e sem linha "Compatível:" distinta de "Move junto:". O exemplo **real**, gerado por uma execução de verdade, está em [`exemplos/plano-upgrade.md`](exemplos/plano-upgrade.md).
 
 ```markdown
 # Plano de Upgrade — requirements.txt (PyPI)
