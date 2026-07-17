@@ -258,7 +258,7 @@ Casos para `tests/test_agent.py`: manifesto vazio, linha malformada, pacote inex
 
 ## Onda 1 — Urgente
 ### requests 2.28.1 → 2.32.4   [minor · risco baixo]
-Por quê:     GHSA-9wx4-h78v (alta), vazamento de credencial em redirect  [OSV]
+Por quê:     GHSA-9hjg-9r4m-mvj7, vazamento de credenciais .netrc via URL maliciosa  [OSV]
 Compatível:  satisfaz urllib3<1.27 que você fixou                        [PyPI]
 Risco:       salto minor, sem remoção de API pública                     [LLM]
 
