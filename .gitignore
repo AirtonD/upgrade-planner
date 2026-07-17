@@ -1,6 +1,9 @@
 # Segredos — nunca versionar
 .env
 
+# Material do curso (enunciado), nao faz parte da entrega
+*.pdf
+
 # Saídas geradas pelo agente
 saidas/
 

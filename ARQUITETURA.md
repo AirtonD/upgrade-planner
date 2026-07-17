@@ -20,14 +20,14 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 
 | ✔ | Nº | Critério | Pts | Artefato | Status |
 |---|----|----------|-----|----------|--------|
-| ☐ | 1 | Versionamento com branches e commits semânticos | 1,0 | histórico do repo | Repo ainda não criado |
-| ☐ | 2 | Contribuição individual e produtividade | 1,0 | commits ao longo dos dias | Depende do nº 1 |
-| ☐ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | `prompts.md` iniciado; README pendente |
+| ☐ | 1 | Versionamento com branches e commits semânticos | 1,0 | histórico do repo | Branch por etapa + merge `--no-ff` + commits semânticos, em andamento desde 17/07 |
+| ☐ | 2 | Contribuição individual e produtividade | 1,0 | commits ao longo dos dias | Em andamento — só avaliável no fim |
+| ☐ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md e prompts.md escritos; vai crescer com o código |
 | ☐ | 4 | Ideia do projeto e apresentação | 1,0 | `docs/slides.md` | Ideia fechada; slides pendentes |
 | ☐ | 5 | Implementação do agente com LangGraph | 1,0 | `src/agent.py` | Desenhado (seção 6); não implementado |
-| ☐ | 6 | Uso de ferramenta integrada ao agente | 1,0 | `src/registries.py`, `vulns.py`, `resolver.py` | Fontes verificadas (seção 4); não implementado |
-| ☐ | 7 | Cuidados básicos de segurança | 1,0 | `.gitignore`, `.env.example` | Pendente — **fazer no 1º commit** |
-| ☐ | 8 | Contexto, memória e validação básica | 2,0 | estado do grafo + Pydantic | Desenhado (seções 7 e 8); não implementado |
+| ✔ | 6 | Uso de ferramenta integrada ao agente | 1,0 | `src/registries.py`, `vulns.py`, `resolver.py` | Implementadas e testadas contra API real; falta plugar no grafo (nº 5) |
+| ✔ | 7 | Cuidados básicos de segurança | 1,0 | `.gitignore`, `.env.example` | `.env` e `*.pdf` no gitignore desde o 1º commit; nenhum segredo versionado |
+| ☐ | 8 | Contexto, memória e validação básica | 2,0 | estado do grafo + Pydantic | Pydantic em todos os modelos de dados + validação de nome de pacote; falta o estado do grafo (`TypedDict`) |
 
 **Onde a nota realmente está:** critérios 3 e 8 valem 2,0 cada. Documentação + validação = **4 dos 10 pontos**. "O agente funciona" (5 e 6) vale 2,0. Capriche no README e nas validações antes de sofisticar o agente.
 
@@ -46,17 +46,17 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 - [ ] Executa de forma funcional e gera saída estruturada
 
 **Ferramentas, contexto e validação**
-- [ ] Pelo menos uma ferramenta integrada
-- [ ] A ferramenta executa ação real (não simulada)
-- [ ] Usa contexto ou memória durante a execução
-- [ ] Validação básica de entrada, saída ou uso da ferramenta
-- [ ] Nenhuma chave/token versionado
+- [ ] Pelo menos uma ferramenta integrada *ao agente* (as ferramentas existem e funcionam isoladas — falta o grafo que as integra)
+- [x] A ferramenta executa ação real (não simulada) — `registries.py` e `vulns.py` testados contra API real
+- [ ] Usa contexto ou memória durante a execução (depende do estado do grafo, nº 5)
+- [x] Validação básica de entrada, saída ou uso da ferramenta — Pydantic nos modelos + regex antes de montar URL
+- [x] Nenhuma chave/token versionado
 
 **README e prompts**
-- [ ] README apresenta problema, objetivo e funcionamento
-- [ ] README explica como executar
-- [ ] README descreve o fluxo LangGraph e a ferramenta
-- [ ] README traz exemplo de entrada e saída
+- [x] README apresenta problema, objetivo e funcionamento
+- [x] README explica como executar (o que já roda hoje + o que falta)
+- [x] README descreve o fluxo LangGraph e a ferramenta
+- [ ] README traz exemplo de entrada e saída — entrada sim, saída pendente (depende de `src/agent.py`, não fabricar saída falsa)
 - [x] Principais prompts registrados em `.md` → `docs/prompts.md` (atualizar até o fim)
 
 **Apresentação**
