@@ -106,6 +106,118 @@ def consultar_versao(nome: str, versao: str) -> VersaoPacote:
     )
 
 
+# --- npm ---------------------------------------------------------------------
+#
+# npm ganha consulta de versao/data e CVE (via vulns.py), mas fica de fora do
+# agrupamento "sobe junto" do resolver.py: o requires_dist do npm vem como
+# "nome@range" (nao PEP 508), e a propria estrutura do node_modules torna
+# conflito cruzado raro fora de peerDependencies, que nao esta neste escopo
+# (ARQUITETURA.md, secao 4 — assimetria pip x npm, decisao deliberada).
+
+_NOME_PACOTE_NPM_VALIDO = re.compile(r"^(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$")
+# fullmatch, nao match: com match(), "1.2.3 - 2.3.4" (range hifenizado) casava
+# so o prefixo "1.2.3" e ignorava o resto em silencio — bug real encontrado
+# no self-check deste modulo. +build (metadado semver) e opcional e ignorado
+# na comparacao, como manda a spec.
+_SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
+
+
+def _validar_nome_npm(nome: str) -> str:
+    if not _NOME_PACOTE_NPM_VALIDO.match(nome):
+        raise ValueError(f"nome de pacote npm inválido, recuso montar URL com isso: {nome!r}")
+    return nome
+
+
+def _semver_tuple(versao: str) -> tuple[int, int, int] | None:
+    m = _SEMVER_RE.fullmatch(versao.strip())
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
+def _semver_eh_prerelease(versao: str) -> bool:
+    m = _SEMVER_RE.fullmatch(versao.strip())
+    return bool(m and m.group(4))
+
+
+def satisfaz_range_npm(restricao: str, versao: str) -> bool | None:
+    """Cobre o subconjunto que aparece na maioria esmagadora dos package.json:
+    versão exata, `^`, `~`, e comparadores simples (`>=`, `<=`, `>`, `<`, `=`).
+
+    NÃO cobre `||`, ranges hifenizados ('1.2.3 - 2.3.4') nem `x`/`*` parciais
+    em minor/patch. Nesses casos devolve None (não avaliado) em vez de
+    arriscar um resultado errado — quem chama trata None como "não deu pra
+    saber a partir da faixa declarada".
+
+    # ponytail: subconjunto deliberado, não um motor semver completo.
+    # Upgrade path se um dia precisar do resto: node-semver via subprocess
+    # do Node (se disponível) ou uma lib Python dedicada — não vale reescrever
+    # a gramática inteira à mão para os poucos manifestos que usam o restante.
+    """
+    restricao = restricao.strip()
+    v = _semver_tuple(versao)
+    if v is None:
+        return None
+    if restricao in ("", "*", "latest", "x"):
+        return True
+    if restricao.startswith("^"):
+        base = _semver_tuple(restricao[1:])
+        if base is None:
+            return None
+        if base[0] > 0:
+            return v[0] == base[0] and v >= base
+        if base[1] > 0:
+            return v[0] == 0 and v[1] == base[1] and v >= base
+        return v == base
+    if restricao.startswith("~"):
+        base = _semver_tuple(restricao[1:])
+        if base is None:
+            return None
+        return v[0] == base[0] and v[1] == base[1] and v >= base
+    for prefixo, cmp in (
+        (">=", lambda a, b: a >= b), ("<=", lambda a, b: a <= b),
+        (">", lambda a, b: a > b), ("<", lambda a, b: a < b), ("=", lambda a, b: a == b),
+    ):
+        if restricao.startswith(prefixo):
+            alvo = _semver_tuple(restricao[len(prefixo):])
+            return None if alvo is None else cmp(v, alvo)
+    alvo = _semver_tuple(restricao)  # versão exata, sem operador
+    return None if alvo is None else v == alvo
+
+
+def _data_lancamento_npm(tempos: dict, versao: str) -> datetime | None:
+    bruto = tempos.get(versao) if versao else None
+    return datetime.fromisoformat(bruto.replace("Z", "+00:00")) if bruto else None
+
+
+def consultar_pacote_npm(nome: str) -> InfoPacote:
+    """Todas as versões publicadas (estáveis, não descontinuadas) + a 'latest' do npm."""
+    nome = _validar_nome_npm(nome)
+    dados = _get_json(f"https://registry.npmjs.org/{nome}", nome)
+
+    versoes_validas = []
+    for versao, manifesto in dados.get("versions", {}).items():
+        if manifesto.get("deprecated"):
+            continue
+        if _semver_tuple(versao) is None or _semver_eh_prerelease(versao):
+            continue
+        versoes_validas.append(versao)
+    versoes_validas.sort(key=_semver_tuple)
+
+    tempos = dados.get("time", {})
+    ultima_tag = dados.get("dist-tags", {}).get("latest") or (versoes_validas[-1] if versoes_validas else "")
+    ultima = VersaoPacote(
+        versao=ultima_tag,
+        lancado_em=_data_lancamento_npm(tempos, ultima_tag),
+        requer=[],
+    )
+    return InfoPacote(nome=nome, versoes=versoes_validas, ultima=ultima)
+
+
+def consultar_versao_npm(nome: str, versao: str) -> VersaoPacote:
+    nome = _validar_nome_npm(nome)
+    dados = _get_json(f"https://registry.npmjs.org/{nome}/{versao}", nome)
+    return VersaoPacote(versao=dados.get("version", versao), lancado_em=None, requer=[])
+
+
 def _demo() -> None:
     info = consultar_pacote("requests")
     assert info.nome == "requests"
@@ -124,7 +236,26 @@ def _demo() -> None:
     else:
         raise AssertionError("nome de pacote malicioso deveria ter sido rejeitado")
 
-    print(f"registries._demo: ok — requests tem {len(info.versoes)} versões publicadas")
+    # semver npm: subconjunto suportado, sem rede
+    assert satisfaz_range_npm("^4.17.1", "4.18.2") is True
+    assert satisfaz_range_npm("^4.17.1", "5.0.0") is False
+    assert satisfaz_range_npm("~1.19.0", "1.19.5") is True
+    assert satisfaz_range_npm("~1.19.0", "1.20.0") is False
+    assert satisfaz_range_npm(">=2.0.0", "1.9.9") is False
+    assert satisfaz_range_npm("1.2.3 - 2.3.4", "2.0.0") is None, "hifenizado nao e suportado, deve devolver None"
+
+    info_npm = consultar_pacote_npm("express")
+    assert info_npm.nome == "express"
+    assert "4.18.2" in info_npm.versoes, "esperava achar 4.18.2 no histórico do express"
+    assert not info_npm.ultima.requer, "npm nao alimenta requer — decisao de escopo (ver docstring)"
+
+    v_npm = consultar_versao_npm("express", "4.18.2")
+    assert v_npm.versao == "4.18.2"
+
+    print(
+        f"registries._demo: ok — requests tem {len(info.versoes)} versões (PyPI) | "
+        f"express tem {len(info_npm.versoes)} versões (npm)"
+    )
 
 
 if __name__ == "__main__":

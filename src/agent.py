@@ -74,7 +74,7 @@ def parsear_manifesto(state: EstadoUpgrade) -> dict:
     return {"dependencias": manifesto.dependencias, "erros": erros}
 
 
-def _versao_efetiva(dep: Dependencia, info: InfoPacote) -> str | None:
+def _versao_efetiva_pypi(dep: Dependencia, info: InfoPacote) -> str | None:
     """A versao que o instalador resolveria hoje dado o que o manifesto declara.
 
     Cobre tanto pin exato (==) quanto faixa (>=, ~=) ou ausencia de restricao —
@@ -92,14 +92,41 @@ def _versao_efetiva(dep: Dependencia, info: InfoPacote) -> str | None:
     return candidatos[-1] if candidatos else None
 
 
+def _versao_efetiva_npm(dep: Dependencia, info: InfoPacote) -> str | None:
+    """Equivalente npm de _versao_efetiva_pypi, usando o range matcher limitado
+    de registries.satisfaz_range_npm.
+
+    Faixa nao suportada (`||`, hifenizada) ou sem candidato: cai para a tag
+    'latest' do npm em vez de reportar erro — leniencia deliberada, dado que
+    o valor do npm neste projeto ja e CVE/defasagem, nao resolucao exata de
+    conflito (ARQUITETURA.md, secao 4).
+    """
+    if not info.versoes:
+        return None
+    if not dep.restricao:
+        return info.versoes[-1]
+    candidatos = [
+        v for v in info.versoes
+        if registries.satisfaz_range_npm(dep.restricao, v)
+    ]
+    if candidatos:
+        return candidatos[-1]
+    return info.ultima.versao or None
+
+
 def consultar_registry(state: EstadoUpgrade) -> dict:
     versoes_atuais: dict[str, VersaoPacote] = {}
     infos: dict[str, InfoPacote] = {}
     erros: list[str] = []
 
+    eh_npm = state.get("ecossistema") == "npm"
+    consultar_pacote_fn = registries.consultar_pacote_npm if eh_npm else registries.consultar_pacote
+    consultar_versao_fn = registries.consultar_versao_npm if eh_npm else registries.consultar_versao
+    versao_efetiva_fn = _versao_efetiva_npm if eh_npm else _versao_efetiva_pypi
+
     for dep in state.get("dependencias", []):
         try:
-            info = registries.consultar_pacote(dep.nome)
+            info = consultar_pacote_fn(dep.nome)
         except registries.PacoteNaoEncontrado:
             erros.append(f"{dep.nome}: não encontrado no registry")
             continue
@@ -107,13 +134,13 @@ def consultar_registry(state: EstadoUpgrade) -> dict:
             erros.append(f"{dep.nome}: falha ao consultar registry ({exc})")
             continue
 
-        versao_efetiva = _versao_efetiva(dep, info)
+        versao_efetiva = versao_efetiva_fn(dep, info)
         if versao_efetiva is None:
             erros.append(f"{dep.nome}: nenhuma versão publicada satisfaz '{dep.restricao}'")
             continue
 
         try:
-            versoes_atuais[dep.nome] = registries.consultar_versao(dep.nome, versao_efetiva)
+            versoes_atuais[dep.nome] = consultar_versao_fn(dep.nome, versao_efetiva)
         except httpx.HTTPError as exc:
             erros.append(f"{dep.nome}: falha ao consultar versão {versao_efetiva} ({exc})")
             continue
