@@ -45,29 +45,35 @@ Essa tomada de decisão é modelada como aresta condicional no `StateGraph` (ver
 | Cliente PyPI | `src/registries.py` | Consulta `pypi.org/pypi/{pkg}/json` — versões reais publicadas, data de lançamento, `requires_dist` de cada versão | ✅ implementado e testado contra a API real |
 | Cliente OSV.dev | `src/vulns.py` | `POST api.osv.dev/v1/query` — CVEs/GHSAs reais por pacote+versão (mesma query serve PyPI e npm) | ✅ implementado e testado contra a API real |
 | Resolvedor de restrições | `src/resolver.py` | Núcleo determinístico: para cada dependência, calcula a maior versão viável e detecta se outra dependência do manifesto trava essa versão; se travar, testa se subir as duas juntas resolve | ✅ implementado, função pura, testada com fixture |
-| Orquestração (`StateGraph`) | `src/agent.py` | Liga as ferramentas acima num grafo LangGraph com estado compartilhado e aresta condicional | ⏳ próxima etapa |
-| CLI | `src/main.py` | `python -m src.main <manifesto>` → roda o grafo, escreve `saidas/plano-upgrade.md` | ⏳ próxima etapa |
+| Orquestração (`StateGraph`) | `src/agent.py` | Liga as ferramentas acima num grafo LangGraph com estado compartilhado e duas arestas condicionais | ✅ implementado, rodado ponta a ponta contra PyPI + OSV.dev reais |
+| Avaliação de risco | `src/prompts.py` | Prompt isolado do fluxo; LLM (Groq) só classifica risco, nunca escreve fato — sem `GROQ_API_KEY` cai num fallback "não avaliado" em vez de quebrar | ✅ implementado; ainda não testado com uma chave real |
+| CLI | `src/main.py` | `python -m src.main <manifesto>` → roda o grafo, escreve `saidas/plano-upgrade.md` | ✅ implementado e testado |
 
 Cada ferramenta acima tem um `if __name__ == "__main__":` com verificação própria (`assert`), rodável com `python -m src.<modulo>` — é assim que cada peça foi validada antes de existir o grafo que as liga.
 
-## Fluxo com LangGraph (desenhado, implementação em andamento)
+## Fluxo com LangGraph (implementado)
 
 ```mermaid
 flowchart TD
     START([manifesto]) --> V[validar_entrada]
-    V -->|inválido| ERRO[gerar_saida: erro]
+    V -->|inválido| ERRO[gerar_saida_erro]
     V -->|válido| P[parsear_manifesto]
-    P --> C[consultar_registry]
+    P -->|sem dependências| ERRO
+    P -->|ok| C[consultar_registry]
     C --> O[consultar_osv]
     O --> D{há CVE ou defasagem?}
-    D -->|não| OK[gerar_saida: tudo em dia]
+    D -->|não| OK[gerar_saida_ok]
     D -->|sim| R[resolver_restricoes]
     R --> A[avaliar_risco - LLM]
-    A --> G[gerar_plano - LLM]
+    A --> G[gerar_plano]
     G --> END([plano-upgrade.md])
     ERRO --> END
     OK --> END
 ```
+
+Duas arestas condicionais, não uma: além de "há CVE ou defasagem?", `validar_entrada` **e** `parsear_manifesto` podem encerrar cedo em erro (arquivo inexistente, vazio, ou sem nenhuma dependência reconhecível) — sem gastar consulta de rede nem chamada de LLM à toa.
+
+`gerar_plano` **não** chama o LLM de novo. É um template determinístico em Python que monta o markdown a partir do estado — só a linha `Risco:` de cada item vem do `avaliar_risco`. Foi uma escolha deliberada: deixar o LLM reescrever o plano inteiro arriscaria alucinar um fato que já estava correto no estado. Ver `docs/prompts.md` para a decisão completa.
 
 O estado (`EstadoUpgrade`, um `TypedDict`) carrega o manifesto parseado, as versões e CVEs consultadas, o resultado do resolvedor e a avaliação de risco por todos os nós — é o contexto/memória da execução. Detalhe completo em `ARQUITETURA.md`, seções 6 e 7.
 
@@ -99,14 +105,14 @@ python -m src.vulns          # consulta o OSV.dev de verdade (rede necessária)
 python -m src.resolver       # resolve conflitos com dados fictícios (sem rede)
 ```
 
-### Quando `src/agent.py` e `src/main.py` existirem
+### O agente completo
 
 ```bash
-cp .env.example .env         # preencha GROQ_API_KEY
+cp .env.example .env         # preencha GROQ_API_KEY (opcional — sem ela, "Risco" fica "não avaliado")
 python -m src.main exemplos/requirements.txt
 ```
 
-Isso vai gerar `saidas/plano-upgrade.md`.
+Isso gera `saidas/plano-upgrade.md` e imprime o plano no terminal. `exemplos/plano-upgrade.md` tem uma cópia de uma execução real (sem `GROQ_API_KEY`, por isso toda linha `Risco:` diz "não avaliado" — ainda não testei o agente com uma chave de verdade).
 
 ## Exemplo de entrada
 
@@ -130,9 +136,38 @@ A linha inválida está lá de propósito, para mostrar que o parser não quebra
 
 ## Exemplo de saída
 
-**Ainda não existe** — depende de `src/agent.py`, que é a próxima etapa do desenvolvimento. Quando existir, este README será atualizado com a saída real gerada a partir do `exemplos/requirements.txt` acima (não um exemplo fabricado à mão).
+[`exemplos/plano-upgrade.md`](exemplos/plano-upgrade.md) — gerado de verdade a partir do `exemplos/requirements.txt` acima, rodando contra PyPI e OSV.dev reais (sem `GROQ_API_KEY`, por isso todo `Risco:` diz "não avaliado"; com a chave, essa linha viraria julgamento do modelo):
 
-O **formato** planejado para essa saída — com a etiqueta de procedência (`[PyPI]`, `[OSV]`, `[LLM]`) em cada linha, para que todo fato seja rastreável e só o julgamento venha do modelo — está documentado em `ARQUITETURA.md`, seção 9.
+```markdown
+# Plano de Upgrade — requirements.txt (PyPI)
+> 8 dependências diretas · 5 vulnerável(is) · 4 com upgrade sugerido · 0 bloqueada(s)
+
+## Onda 1 — Urgente
+
+### boto3 1.29.0 → 1.43.50   [minor]
+Move junto:  boto3==1.29.0 exige botocore<1.33.0,>=1.32.0; botocore==1.29.0 exige urllib3<1.27,>=1.25.4; requests==2.28.1 exige urllib3<1.27,>=1.21.1  [PyPI]
+Risco:       não avaliado — GROQ_API_KEY ausente  [LLM]
+...
+### fastapi 0.85.0 → 0.139.2   [minor]
+Por quê:     PYSEC-2024-38 — FastAPI is a web framework for building APIs...  [OSV]
+Move junto:  fastapi==0.85.0 exige pydantic!=1.7,...,<2.0.0,>=1.6.2  [PyPI]
+Risco:       não avaliado — GROQ_API_KEY ausente  [LLM]
+### pydantic 1.10.2 → 2.13.4   [major]
+Por quê:     GHSA-mr82-8j83-vxmv, PYSEC-2026-1812 — Pydantic regular expression denial of service  [OSV]
+Move junto:  fastapi==0.85.0 exige pydantic!=1.7,...,<2.0.0,>=1.6.2  [PyPI]
+Risco:       não avaliado — GROQ_API_KEY ausente  [LLM]
+...
+## Onda 2 — Seguro (sem CVE, salto pequeno)
+
+### uvicorn 0.19.0 → 0.51.0   [minor]
+Risco:       não avaliado — GROQ_API_KEY ausente  [LLM]
+```
+
+Arquivo completo (37 linhas) em [`exemplos/plano-upgrade.md`](exemplos/plano-upgrade.md).
+
+Repare que `fastapi` e `pydantic` aparecem no **mesmo grupo**, com "Move junto" explicando por quê — é o resolvedor detectando que `fastapi==0.85.0` trava `pydantic<2.0.0`, e verificando que a versão mais recente do fastapi já libera pydantic 2.x, então as duas sobem juntas. `boto3`/`botocore`/`urllib3`/`requests` viraram um único grupo maior pelo mesmo motivo, encadeado (cada um trava o próximo). Nenhum desses agrupamentos foi programado à mão — saiu do cruzamento real de `requires_dist` de cada pacote.
+
+A etiqueta de procedência (`[PyPI]`, `[OSV]`, `[LLM]`) em cada linha está documentada em `ARQUITETURA.md`, seção 9.
 
 ---
 
@@ -141,7 +176,10 @@ O **formato** planejado para essa saída — com a etiqueta de procedência (`[P
 - **Groq como provedor de LLM**, via `langchain-groq`.
 - **Resolvedor como função pura, sem rede**: `resolver.py` não chama API nenhuma — recebe dados já buscados por `registries.py`. Isso tornou possível testar o núcleo do agente com fixtures determinísticas, sem depender de rede nem de mock.
 - **Um cliente HTTP por fonte de dado** (`registries.py`, `vulns.py`), cada um com seu próprio `if __name__ == "__main__":` de verificação contra a API real — cada peça foi validada isoladamente antes de existir orquestração.
-- **Etiqueta de procedência na saída**: toda afirmação do plano final será marcada com a fonte (`[PyPI]`, `[OSV]`, `[LLM]`), para que o plano seja auditável linha a linha, não uma caixa preta.
+- **Etiqueta de procedência na saída**: toda afirmação do plano final é marcada com a fonte (`[PyPI]`, `[OSV]`, `[LLM]`), para que o plano seja auditável linha a linha, não uma caixa preta.
+- **`gerar_plano` não chama o LLM** — é template determinístico em Python; só a linha `Risco:` vem do modelo. Um segundo LLM call reescrevendo o plano inteiro arriscaria alucinar um fato que o estado já tinha correto.
+- **Versão "efetiva" calculada a partir da restrição do manifesto**, não só de pin exato (`==`). `>=1.21.1,<1.27` também gera sugestão de upgrade — a versão comparada é a maior que already satisfaz essa faixa hoje, que é o que o `pip install` de fato resolveria.
+- **Pré-release nunca é "a maior versão disponível"**: descoberto rodando contra a API real do PyPI — sem esse filtro, `pydantic` apareceu como `2.14.0a1` (alpha) e travou um grupo que deveria ter resolvido.
 - Decisões completas, incluindo as descartadas (ex.: "menor conjunto de upgrades que zera CVEs" foi rejeitada por degenerar em recomendação trivial), estão registradas em `docs/prompts.md`.
 
 ## Limitações da solução
@@ -162,13 +200,17 @@ requirements.txt
 .env.example
 src/
   parsers.py           # parser de requirements.txt
-  registries.py         # cliente PyPI
-  vulns.py               # cliente OSV.dev
-  resolver.py             # nucleo de restricoes (funcao pura)
+  registries.py        # cliente PyPI
+  vulns.py              # cliente OSV.dev
+  resolver.py            # nucleo de restricoes (funcao pura)
+  prompts.py              # prompt do LLM, isolado do fluxo
+  agent.py                 # StateGraph: liga tudo, com aresta condicional
+  main.py                   # CLI
 docs/
   prompts.md            # prompts usados no desenvolvimento
 exemplos/
   requirements.txt      # manifesto de exemplo, com conflito real
+  plano-upgrade.md      # saida real de uma execucao
 ```
 
 ## Documentação relacionada
