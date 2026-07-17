@@ -1,0 +1,14 @@
+# manifesto de exemplo — deliberadamente desatualizado, com um conflito real
+# e uma linha quebrada, para exercitar o parser e o resolvedor
+
+fastapi==0.85.0
+pydantic==1.10.2               # fastapi 0.85 exige pydantic<2: upgrade de pydantic arrasta fastapi
+requests==2.28.1                # tem CVE conhecido (GHSA-9wx4-h78v) em versões antigas
+urllib3>=1.21.1,<1.27
+python-dotenv~=0.21
+uvicorn[standard]==0.19.0
+
+!!! isto não é uma linha de dependência válida !!!
+
+boto3==1.29.0
+botocore==1.29.0                # trava boto3: upgrade de boto3 exige subir botocore junto
