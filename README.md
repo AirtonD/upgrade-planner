@@ -1,6 +1,6 @@
 # Planejador de Upgrade de Dependências
 
-Agente em **LangGraph** que lê um manifesto de dependências (`requirements.txt`, e futuramente `package.json`), cruza dados reais de registry e de vulnerabilidades, e devolve um **plano de upgrade priorizado em ondas** — não uma lista de versões, mas a ordem em que você abriria os PRs.
+Agente em **LangGraph** que lê um manifesto de dependências (`requirements.txt` ou `package.json`), cruza dados reais de registry e de vulnerabilidades, e devolve um **plano de upgrade priorizado em ondas** — não uma lista de versões, mas a ordem em que você abriria os PRs.
 
 > Mini-Projeto Avaliativo — Módulo 2, disciplina *IA para Desenvolvedores [T1]*. Projeto individual.
 > **Status atual do desenvolvimento está rastreado em [`ARQUITETURA.md`](ARQUITETURA.md), seção 1** — este README descreve o desenho completo do projeto; a seção referida diz exatamente o que já está implementado e o que falta.
@@ -19,7 +19,7 @@ Isso não é consulta — é priorização sobre um grafo de restrições, com j
 
 | | |
 |---|---|
-| **Entrada** | Caminho de um `requirements.txt` (suporte a `package.json` planejado, ver limitações) |
+| **Entrada** | Caminho de um `requirements.txt` ou `package.json` — ecossistema detectado pelo nome do arquivo |
 | **Saída** | `saidas/plano-upgrade.md` — plano de upgrade em ondas, com cada afirmação rotulada pela fonte que a sustenta |
 | **Processo** | Parsear o manifesto → consultar versões reais e CVEs → resolver conflitos de restrição entre as próprias dependências do manifesto → o LLM classifica risco e escreve o plano |
 
@@ -41,10 +41,11 @@ Essa tomada de decisão é modelada como aresta condicional no `StateGraph` (ver
 
 | Ferramenta | Arquivo | O que faz | Status |
 |---|---|---|---|
-| Parser de manifesto | `src/parsers.py` | `requirements.txt` → lista normalizada de dependências (nome, restrição), usando `packaging.requirements` | ✅ implementado e testado |
+| Parser de manifesto | `src/parsers.py` | `requirements.txt` (via `packaging.requirements`) e `package.json` (`dependencies`+`devDependencies`) → lista normalizada de dependências | ✅ implementado e testado, os dois ecossistemas |
 | Cliente PyPI | `src/registries.py` | Consulta `pypi.org/pypi/{pkg}/json` — versões reais publicadas, data de lançamento, `requires_dist` de cada versão | ✅ implementado e testado contra a API real |
+| Cliente npm | `src/registries.py` | Consulta `registry.npmjs.org/{pkg}` — versões reais, tag `latest`, com matcher de range semver (`^`, `~`, exata, comparadores) | ✅ implementado e testado contra a API real |
 | Cliente OSV.dev | `src/vulns.py` | `POST api.osv.dev/v1/query` — CVEs/GHSAs reais por pacote+versão (mesma query serve PyPI e npm) | ✅ implementado e testado contra a API real |
-| Resolvedor de restrições | `src/resolver.py` | Núcleo determinístico: para cada dependência, calcula a maior versão viável e detecta se outra dependência do manifesto trava essa versão; se travar, testa se subir as duas juntas resolve | ✅ implementado, função pura, testada com fixture |
+| Resolvedor de restrições | `src/resolver.py` | Núcleo determinístico: para cada dependência, calcula a maior versão viável e detecta se outra dependência do manifesto trava essa versão; se travar, testa se subir as duas juntas resolve | ✅ implementado, função pura, testada com fixture. **Só PyPI** alimenta o agrupamento "sobe junto" — ver limitações |
 | Orquestração (`StateGraph`) | `src/agent.py` | Liga as ferramentas acima num grafo LangGraph com estado compartilhado e duas arestas condicionais | ✅ implementado, rodado ponta a ponta contra PyPI + OSV.dev reais |
 | Avaliação de risco | `src/prompts.py` | Prompt isolado do fluxo; LLM (Groq) só classifica risco, nunca escreve fato — sem `GROQ_API_KEY` cai num fallback "não avaliado" em vez de quebrar | ✅ implementado; ainda não testado com uma chave real |
 | CLI | `src/main.py` | `python -m src.main <manifesto>` → roda o grafo, escreve `saidas/plano-upgrade.md` | ✅ implementado e testado |
@@ -99,8 +100,8 @@ python -m venv .venv
 .venv/Scripts/activate       # Windows
 pip install -r requirements.txt
 
-python -m src.parsers        # parseia exemplos/requirements.txt
-python -m src.registries     # consulta o PyPI de verdade (rede necessária)
+python -m src.parsers        # parseia exemplos/requirements.txt e exemplos/package.json
+python -m src.registries     # consulta PyPI e npm de verdade (rede necessária)
 python -m src.vulns          # consulta o OSV.dev de verdade (rede necessária)
 python -m src.resolver       # resolve conflitos com dados fictícios (sem rede)
 ```
@@ -109,7 +110,8 @@ python -m src.resolver       # resolve conflitos com dados fictícios (sem rede)
 
 ```bash
 cp .env.example .env         # preencha GROQ_API_KEY (opcional — sem ela, "Risco" fica "não avaliado")
-python -m src.main exemplos/requirements.txt
+python -m src.main exemplos/requirements.txt   # PyPI
+python -m src.main exemplos/package.json       # npm
 ```
 
 Isso gera `saidas/plano-upgrade.md` e imprime o plano no terminal. `exemplos/plano-upgrade.md` tem uma cópia de uma execução real (sem `GROQ_API_KEY`, por isso toda linha `Risco:` diz "não avaliado" — ainda não testei o agente com uma chave de verdade).
@@ -133,6 +135,8 @@ botocore==1.29.0
 ```
 
 A linha inválida está lá de propósito, para mostrar que o parser não quebra com entrada malformada — ela vai para a lista de erros e o resto do manifesto continua sendo processado.
+
+Equivalente npm: [`exemplos/package.json`](exemplos/package.json) — `express`, `lodash`, `axios`, `body-parser` (todos com CVE conhecido em versões antigas) e `nodemon` como dev dependency, misturando pin exato, `^` e `~`.
 
 ## Exemplo de saída
 
@@ -169,6 +173,8 @@ Repare que `fastapi` e `pydantic` aparecem no **mesmo grupo**, com "Move junto" 
 
 A etiqueta de procedência (`[PyPI]`, `[OSV]`, `[LLM]`) em cada linha está documentada em `ARQUITETURA.md`, seção 9.
 
+O equivalente para npm — [`exemplos/plano-upgrade-npm.md`](exemplos/plano-upgrade-npm.md), gerado a partir de `exemplos/package.json` — não tem nenhum "Move junto": é a assimetria pip×npm na prática (ver Limitações abaixo), não um bug.
+
 ---
 
 ## Principais decisões tomadas
@@ -178,7 +184,7 @@ A etiqueta de procedência (`[PyPI]`, `[OSV]`, `[LLM]`) em cada linha está docu
 - **Um cliente HTTP por fonte de dado** (`registries.py`, `vulns.py`), cada um com seu próprio `if __name__ == "__main__":` de verificação contra a API real — cada peça foi validada isoladamente antes de existir orquestração.
 - **Etiqueta de procedência na saída**: toda afirmação do plano final é marcada com a fonte (`[PyPI]`, `[OSV]`, `[LLM]`), para que o plano seja auditável linha a linha, não uma caixa preta.
 - **`gerar_plano` não chama o LLM** — é template determinístico em Python; só a linha `Risco:` vem do modelo. Um segundo LLM call reescrevendo o plano inteiro arriscaria alucinar um fato que o estado já tinha correto.
-- **Versão "efetiva" calculada a partir da restrição do manifesto**, não só de pin exato (`==`). `>=1.21.1,<1.27` também gera sugestão de upgrade — a versão comparada é a maior que already satisfaz essa faixa hoje, que é o que o `pip install` de fato resolveria.
+- **Versão "efetiva" calculada a partir da restrição do manifesto**, não só de pin exato (`==`). `>=1.21.1,<1.27` também gera sugestão de upgrade — a versão comparada é a maior que já satisfaz essa faixa hoje, que é o que o `pip install`/`npm install` de fato resolveria.
 - **Pré-release nunca é "a maior versão disponível"**: descoberto rodando contra a API real do PyPI — sem esse filtro, `pydantic` apareceu como `2.14.0a1` (alpha) e travou um grupo que deveria ter resolvido.
 - Decisões completas, incluindo as descartadas (ex.: "menor conjunto de upgrades que zera CVEs" foi rejeitada por degenerar em recomendação trivial), estão registradas em `docs/prompts.md`.
 
@@ -187,7 +193,8 @@ A etiqueta de procedência (`[PyPI]`, `[OSV]`, `[LLM]`) em cada linha está docu
 - **Só o manifesto, não o código.** O agente julga risco por salto de versão e `requires_dist`; não lê o código do projeto para confirmar o que vai quebrar de fato.
 - **Só dependências diretas** declaradas no manifesto — não resolve a árvore transitiva inteira.
 - **Comparação atual → última disponível**, não uma varredura de todo o espaço de versões intermediárias como um solver SAT completo faria.
-- **`package.json`/npm ainda não implementado.** `parsers.detectar_ecossistema` já reconhece o arquivo, mas `parse_manifesto` levanta `NotImplementedError` para ele — é a próxima etapa depois do grafo. Quando existir, a assimetria estrutural entre pip (flat, conflito real existe) e npm (aninhado em `node_modules`, conflito raro fora de `peerDependencies`) será declarada explicitamente, não escondida.
+- **npm não participa do agrupamento "sobe junto".** `requires_dist` do npm vem como `"nome@range"`, formato que o parser PEP 508 do resolvedor não entende — decisão deliberada (ver seção "Ferramentas" acima), não bug. npm ainda ganha consulta real de versão e CVE, só fica sem checagem de conflito cruzado entre as próprias dependências do manifesto (que, por sinal, é rara fora de `peerDependencies`, que também não está neste escopo).
+- **Range de versão do npm cobre só o subconjunto comum**: exata, `^`, `~`, comparadores simples. `||` e ranges hifenizados (`"1.2.3 - 2.3.4"`) não são avaliados — o agente cai para a tag `latest` do pacote em vez de arriscar interpretar errado.
 - **Ferramentas como `pip-audit`/`pip list --outdated` já existem** e cobrem partes deste escopo. O diferencial proposto aqui é cruzar as fontes e produzir um plano agrupado e priorizado com julgamento de risco — não reivindicar ineditismo em cada peça isolada.
 - **A narrativa de risco vem do LLM** e pode variar entre execuções; os fatos (versão, CVE, restrição) não variam, pois vêm sempre da API.
 
@@ -199,18 +206,20 @@ README.md             # este arquivo
 requirements.txt
 .env.example
 src/
-  parsers.py           # parser de requirements.txt
-  registries.py        # cliente PyPI
+  parsers.py           # parser de requirements.txt e package.json
+  registries.py        # clientes PyPI e npm
   vulns.py              # cliente OSV.dev
-  resolver.py            # nucleo de restricoes (funcao pura)
+  resolver.py            # nucleo de restricoes (funcao pura, so PyPI)
   prompts.py              # prompt do LLM, isolado do fluxo
   agent.py                 # StateGraph: liga tudo, com aresta condicional
   main.py                   # CLI
 docs/
   prompts.md            # prompts usados no desenvolvimento
 exemplos/
-  requirements.txt      # manifesto de exemplo, com conflito real
-  plano-upgrade.md      # saida real de uma execucao
+  requirements.txt      # manifesto PyPI, com conflito real
+  package.json           # manifesto npm
+  plano-upgrade.md      # saida real (PyPI)
+  plano-upgrade-npm.md   # saida real (npm)
 ```
 
 ## Documentação relacionada

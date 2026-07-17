@@ -22,7 +22,7 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 |---|----|----------|-----|----------|--------|
 | ☐ | 1 | Versionamento com branches e commits semânticos | 1,0 | histórico do repo | Branch por etapa + merge `--no-ff` + commits semânticos, em andamento desde 17/07 |
 | ☐ | 2 | Contribuição individual e produtividade | 1,0 | commits ao longo dos dias | Em andamento — só avaliável no fim |
-| ☐ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md com exemplo de entrada e saída reais; falta suporte a npm |
+| ✔ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md com exemplos reais dos dois ecossistemas; falta testes automatizados e slides |
 | ☐ | 4 | Ideia do projeto e apresentação | 1,0 | `docs/slides.md` | Ideia fechada; slides pendentes |
 | ✔ | 5 | Implementação do agente com LangGraph | 1,0 | `src/agent.py` | `StateGraph` implementado, rodado ponta a ponta contra PyPI + OSV.dev reais (falta testar `avaliar_risco` com `GROQ_API_KEY` real) |
 | ✔ | 6 | Uso de ferramenta integrada ao agente | 1,0 | `src/registries.py`, `vulns.py`, `resolver.py` | Implementadas, testadas contra API real e integradas ao grafo |
@@ -332,18 +332,18 @@ docs/slides              → docs/slides.md
 | # | Etapa | Entrega | ✔ |
 |---|-------|---------|---|
 | 0 | Arquitetura | `ARQUITETURA.md` | [x] |
-| 1 | `chore/setup` | Repo, `.gitignore`, `.env.example`, `requirements.txt` | [ ] |
-| 2 | `feat/parser-requirements` | Parse do `requirements.txt` → modelo normalizado | [ ] |
-| 3 | `feat/registry-pypi` + `feat/osv` | As duas ferramentas de consulta funcionando | [ ] |
-| 4 | `feat/resolver` | Núcleo de restrições + grupos de co-movimento | [ ] |
-| 5 | `feat/grafo` | StateGraph ligando tudo, rodando ponta a ponta | [ ] |
-| 6 | `feat/parser-package-json` | Suporte a npm | [ ] |
+| 1 | `chore/setup` | Repo, `.gitignore`, `.env.example`, `requirements.txt` | [x] |
+| 2 | `feat/parser-requirements` | Parse do `requirements.txt` → modelo normalizado | [x] |
+| 3 | `feat/registry-pypi` + `feat/osv` | As duas ferramentas de consulta funcionando | [x] |
+| 4 | `feat/resolver` | Núcleo de restrições + grupos de co-movimento | [x] |
+| 5 | `feat/grafo` | StateGraph ligando tudo, rodando ponta a ponta | [x] |
+| 6 | `feat/parser-package-json` | Suporte a npm | [x] |
 | 7 | `feat/validacao` | Pydantic + `tests/test_agent.py` | [ ] |
-| 8 | `docs/readme-e-prompts` | README completo + prompts.md | [ ] |
+| 8 | `docs/readme-e-prompts` | README completo + prompts.md | [x] (escrito ao longo do desenvolvimento, não só no fim) |
 | 9 | `docs/slides` | 2 slides | [ ] |
 | 10 | Submissão | Testar link, submeter no AVA, **não mexer mais** | [ ] |
 
-**Ordem pensada para o prazo:** o suporte a npm (etapa 6) vem depois do fluxo Python completo. Se o tempo apertar, **npm é o primeiro a cair** — vira limitação declarada no README, não entrega quebrada. As etapas 8 e 9 valem 3,0 pts: não deixe para a última hora.
+**Ordem realizada, não a original:** README e prompts.md foram escritos incrementalmente desde a etapa 1, não só no fim — mais fácil manter em dia do que reconstruir depois. npm (etapa 6) saiu no prazo, ao contrário do previsto ("primeiro a cair se apertar") — sobrou tempo por ter simplificado o escopo dele desde o início (ver seção 4, assimetria pip×npm), em vez de tentar paridade completa com o lado PyPI.
 
 ---
 
@@ -351,7 +351,8 @@ docs/slides              → docs/slides.md
 
 - **Só o manifesto, não o código.** O agente julga risco por salto de versão e release notes; não lê seu código para dizer o que vai quebrar de fato.
 - **Só dependências diretas declaradas.** Não monta a árvore transitiva completa.
-- **npm assimétrico** (ver seção 4): resolução de conflito é fraca por natureza do `node_modules` aninhado.
+- **npm assimétrico, por decisão, não por atraso** (ver seção 4): implementado, mas fica fora do agrupamento "sobe junto" do resolvedor — `requires_dist` do npm ("nome@range") não é PEP 508. Ganha consulta real de versão e CVE, só não checagem de conflito cruzado.
+- **Range de versão do npm cobre só o subconjunto comum** (exata, `^`, `~`, comparadores) — `||` e ranges hifenizados caem para a tag `latest` em vez de arriscar interpretação errada.
 - **Ferramentas existentes**: `pip-audit`/`pip list --outdated` cobrem partes disso; o diferencial é o cruzamento e a priorização.
 - **Saída depende do LLM** na parte de risco — os fatos são determinísticos, a narrativa varia entre execuções.
 - **Sem persistência entre execuções.** Se virar requisito, `MemorySaver` do LangGraph resolve sem código novo.
