@@ -1,0 +1,18 @@
+# Segredos — nunca versionar
+.env
+
+# Saídas geradas pelo agente
+saidas/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Editor / SO
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
