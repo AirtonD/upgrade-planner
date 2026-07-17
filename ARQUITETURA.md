@@ -22,8 +22,8 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 |---|----|----------|-----|----------|--------|
 | ☐ | 1 | Versionamento com branches e commits semânticos | 1,0 | histórico do repo | Branch por etapa + merge `--no-ff` + commits semânticos, em andamento desde 17/07 |
 | ☐ | 2 | Contribuição individual e produtividade | 1,0 | commits ao longo dos dias | Em andamento — só avaliável no fim |
-| ✔ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md com exemplos reais dos dois ecossistemas; falta testes automatizados e slides |
-| ☐ | 4 | Ideia do projeto e apresentação | 1,0 | `docs/slides.md` | Ideia fechada; slides pendentes |
+| ✔ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md com exemplos reais dos dois ecossistemas; `tests/test_agent.py` formalizado |
+| ✔ | 4 | Ideia do projeto e apresentação | 1,0 | `docs/slides.md` | 2 slides: problema, agente, entrada, saída, ferramenta, fluxo |
 | ✔ | 5 | Implementação do agente com LangGraph | 1,0 | `src/agent.py` | `StateGraph` implementado, rodado ponta a ponta contra PyPI + OSV.dev reais (falta testar `avaliar_risco` com `GROQ_API_KEY` real) |
 | ✔ | 6 | Uso de ferramenta integrada ao agente | 1,0 | `src/registries.py`, `vulns.py`, `resolver.py` | Implementadas, testadas contra API real e integradas ao grafo |
 | ✔ | 7 | Cuidados básicos de segurança | 1,0 | `.gitignore`, `.env.example` | `.env` e `*.pdf` no gitignore desde o 1º commit; nenhum segredo versionado |
@@ -60,8 +60,8 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 - [x] Principais prompts registrados em `.md` → `docs/prompts.md` (atualizar até o fim)
 
 **Apresentação**
-- [ ] Até 2 slides com problema, agente, entrada, saída, ferramenta e fluxo
-- [ ] Submetida via AVA ou versionada no repositório
+- [x] Até 2 slides com problema, agente, entrada, saída, ferramenta e fluxo → `docs/slides.md`
+- [x] Submetida via AVA ou versionada no repositório — versionada em `docs/slides.md`
 
 **Submissão**
 - [ ] Link do repositório submetido no AVA
@@ -340,7 +340,7 @@ docs/slides              → docs/slides.md
 | 6 | `feat/parser-package-json` | Suporte a npm | [x] |
 | 7 | `feat/validacao` | Pydantic + `tests/test_agent.py` | [x] |
 | 8 | `docs/readme-e-prompts` | README completo + prompts.md | [x] (escrito ao longo do desenvolvimento, não só no fim) |
-| 9 | `docs/slides` | 2 slides | [ ] |
+| 9 | `docs/slides` | 2 slides | [x] |
 | 10 | Submissão | Testar link, submeter no AVA, **não mexer mais** | [ ] |
 
 **Ordem realizada, não a original:** README e prompts.md foram escritos incrementalmente desde a etapa 1, não só no fim — mais fácil manter em dia do que reconstruir depois. npm (etapa 6) saiu no prazo, ao contrário do previsto ("primeiro a cair se apertar") — sobrou tempo por ter simplificado o escopo dele desde o início (ver seção 4, assimetria pip×npm), em vez de tentar paridade completa com o lado PyPI.
