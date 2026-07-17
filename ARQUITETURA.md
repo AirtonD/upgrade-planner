@@ -34,9 +34,9 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 ### 1.2. Checklist final do enunciado (seção 7 do PDF)
 
 **Repositório**
-- [ ] Repositório criado no GitHub e acessível
-- [ ] Contém o código-fonte do agente
-- [ ] Histórico de commits compatível com o desenvolvimento realizado
+- [x] Repositório criado no GitHub e acessível → https://github.com/AirtonD/upgrade-planner
+- [x] Contém o código-fonte do agente
+- [x] Histórico de commits compatível com o desenvolvimento realizado — branch por etapa, merge `--no-ff`
 
 **Agente**
 - [x] Processo a automatizar definido → planejamento de upgrade de dependências
@@ -338,7 +338,7 @@ docs/slides              → docs/slides.md
 | 4 | `feat/resolver` | Núcleo de restrições + grupos de co-movimento | [x] |
 | 5 | `feat/grafo` | StateGraph ligando tudo, rodando ponta a ponta | [x] |
 | 6 | `feat/parser-package-json` | Suporte a npm | [x] |
-| 7 | `feat/validacao` | Pydantic + `tests/test_agent.py` | [ ] |
+| 7 | `feat/validacao` | Pydantic + `tests/test_agent.py` | [x] |
 | 8 | `docs/readme-e-prompts` | README completo + prompts.md | [x] (escrito ao longo do desenvolvimento, não só no fim) |
 | 9 | `docs/slides` | 2 slides | [ ] |
 | 10 | Submissão | Testar link, submeter no AVA, **não mexer mais** | [ ] |

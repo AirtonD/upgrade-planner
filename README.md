@@ -116,6 +116,14 @@ python -m src.main exemplos/package.json       # npm
 
 Isso gera `saidas/plano-upgrade.md` e imprime o plano no terminal. `exemplos/plano-upgrade.md` tem uma cópia de uma execução real (sem `GROQ_API_KEY`, por isso toda linha `Risco:` diz "não avaliado" — ainda não testei o agente com uma chave de verdade).
 
+### Testes
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+`tests/test_agent.py` cobre manifesto vazio, linha malformada, pacote inexistente (404 real contra o PyPI) e o conflito fastapi/pydantic resolvendo em grupo. Só o teste de 404 usa rede — se ela cair, o teste avisa e pula, não falha em silêncio.
+
 ## Exemplo de entrada
 
 [`exemplos/requirements.txt`](exemplos/requirements.txt) — um manifesto deliberadamente desatualizado, com um conflito real de propósito:
@@ -220,6 +228,8 @@ exemplos/
   package.json           # manifesto npm
   plano-upgrade.md      # saida real (PyPI)
   plano-upgrade-npm.md   # saida real (npm)
+tests/
+  test_agent.py         # manifesto vazio, malformado, 404, conflito real
 ```
 
 ## Documentação relacionada
