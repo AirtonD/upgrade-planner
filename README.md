@@ -236,3 +236,4 @@ tests/
 
 - [`ARQUITETURA.md`](ARQUITETURA.md) — arquitetura completa, rastreio de critérios de avaliação, checklist de progresso, cronograma.
 - [`docs/prompts.md`](docs/prompts.md) — prompts usados para planejar e desenvolver o agente.
+- [`docs/slides.md`](docs/slides.md) — apresentação da ideia do projeto (2 slides).
