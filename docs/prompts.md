@@ -64,3 +64,35 @@ definido e deixe explícito que todos os critérios precisam estar atendidos no
 final — quero um rastreador de progresso, marcando o que já foi feito e o que
 falta, para consultar até a entrega.
 ```
+
+---
+
+### Início da implementação
+
+```
+Certo, comece o desenvolvimento.
+```
+
+### Cobrir manifestos sem pin exato
+
+```
+Uma dúvida antes: a maioria dos requirements.txt tem a versão da lib fixada?
+```
+
+Levou à correção de `_versao_efetiva`/`_versao_efetiva_npm` em `agent.py`: a versão comparada passou a ser calculada a partir de qualquer restrição do manifesto (`==`, `>=`, `~=`, `^`, `~` ou ausência de restrição), não só pin exato. Sem isso, o agente ficaria mudo para a maioria dos `requirements.txt` reais, que não são gerados por `pip freeze`.
+
+### Push, segurança e README
+
+```
+Faça push do que fizemos, mas coloque o pdf no gitignore também, e elabore
+o readme. https://github.com/AirtonD/upgrade-planner.git
+```
+
+### Revisão final da documentação
+
+```
+Quero que revise toda a documentação, readme, veja se está tudo atendendo e
+conciso, e atualize também a forma de rodar no readme.
+```
+
+Encontrada e corrigida uma inconsistência real durante a revisão: `ARQUITETURA.md` recomendava `python src/main.py` para rodar o agente — comando que quebraria, já que `main.py` usa import relativo (`from .agent import executar`) e só funciona com `python -m src.main`.

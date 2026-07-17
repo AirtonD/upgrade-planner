@@ -228,6 +228,10 @@ def _formata_grupo(
             ids = ", ".join(v.id for v in achados[:2])
             linhas.append(f"Por quê:     {ids} — {achados[0].resumo}  [OSV]")
         if grupo.motivo and len(grupo.upgrades) > 1:
+            # [PyPI] fixo: so PyPI alimenta requires_dist no resolver hoje, entao
+            # motivo/bloqueio nunca chega aqui vindo de npm (requer=[] sempre la).
+            # Se isso mudar (resolver passar a agrupar npm tambem), esta etiqueta
+            # precisa virar dinamica por ecossistema.
             linhas.append(f"Move junto:  {grupo.motivo}  [PyPI]")
         risco = riscos.get(up.nome)
         if risco:

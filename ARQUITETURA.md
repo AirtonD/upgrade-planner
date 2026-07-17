@@ -24,7 +24,7 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 | ☐ | 2 | Contribuição individual e produtividade | 1,0 | commits ao longo dos dias | Em andamento — só avaliável no fim |
 | ✔ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md com exemplos reais dos dois ecossistemas; `tests/test_agent.py` formalizado |
 | ✔ | 4 | Ideia do projeto e apresentação | 1,0 | `docs/slides.md` | 2 slides: problema, agente, entrada, saída, ferramenta, fluxo |
-| ✔ | 5 | Implementação do agente com LangGraph | 1,0 | `src/agent.py` | `StateGraph` implementado, rodado ponta a ponta contra PyPI + OSV.dev reais (falta testar `avaliar_risco` com `GROQ_API_KEY` real) |
+| ✔ | 5 | Implementação do agente com LangGraph | 1,0 | `src/agent.py` | `StateGraph` implementado, rodado ponta a ponta contra PyPI + OSV.dev reais, incluindo `avaliar_risco` com `GROQ_API_KEY` real |
 | ✔ | 6 | Uso de ferramenta integrada ao agente | 1,0 | `src/registries.py`, `vulns.py`, `resolver.py` | Implementadas, testadas contra API real e integradas ao grafo |
 | ✔ | 7 | Cuidados básicos de segurança | 1,0 | `.gitignore`, `.env.example` | `.env` e `*.pdf` no gitignore desde o 1º commit; nenhum segredo versionado |
 | ✔ | 8 | Contexto, memória e validação básica | 2,0 | estado do grafo + Pydantic | `EstadoUpgrade` (`TypedDict`) implementado com reducer para `erros`; Pydantic em todos os modelos; validação de tamanho de arquivo, nome de pacote, e specifier inválido |
@@ -119,17 +119,19 @@ Isso não é lookup — é priorização sobre um grafo de restrições, com jul
 | LLM | `langchain-groq` (`GROQ_API_KEY`) |
 | Validação | `pydantic` |
 | Config | `python-dotenv` |
-| HTTP | `httpx` (ou `urllib.request` da stdlib, se quiser zero dependência) |
+| HTTP | `httpx` |
 | Versões PEP 440 | `packaging` |
-| Versões semver (npm) | parser próprio de `^`/`~` — **avaliar antes de adicionar dependência** |
+| Versões semver (npm) | parser próprio de `^`/`~`/exata/comparadores em `registries.satisfaz_range_npm` — subconjunto deliberado, não motor semver completo (ver seção 13) |
 
-### Fontes verificadas em 17/07/2026 — todas públicas, sem token
+### Fontes usadas — todas públicas, sem token
 
 | Fonte | Endpoint | O que dá |
 |-------|----------|----------|
-| **PyPI** | `GET https://pypi.org/pypi/{pkg}/{versão}/json` | `requires_dist` (ex.: `"urllib3 (<1.27,>=1.21.1)"`), `upload_time` |
-| **npm** | `GET https://registry.npmjs.org/{pkg}/{versão}` | `dependencies` com ranges (ex.: `"etag":"~1.8.1"`), `peerDependencies` |
-| **OSV.dev** | `POST https://api.osv.dev/v1/query` | Body: `{"package":{"name":..,"ecosystem":"PyPI"\|"npm"},"version":..}` → `{"vulns":[...]}` |
+| **PyPI** | `GET .../pypi/{pkg}/json` | Todas as versões publicadas (`releases`) |
+| **PyPI** | `GET .../pypi/{pkg}/{versão}/json` | `requires_dist` (ex.: `"urllib3<1.27,>=1.21.1"`) e `upload_time` de UMA versão — nota: este endpoint traz a chave `urls`, não `releases` (achado durante a implementação, ver `docs/prompts.md`) |
+| **npm** | `GET registry.npmjs.org/{pkg}` | Todas as versões (`versions`), cada uma já com `dependencies` embutido — não precisa de uma segunda chamada por versão como o PyPI |
+| **npm** | `GET registry.npmjs.org/{pkg}/{versão}` | Manifesto de uma versão específica |
+| **OSV.dev** | `POST api.osv.dev/v1/query` | Body: `{"package":{"name":..,"ecosystem":"PyPI"\|"npm"},"version":..}` → `{"vulns":[...]}` |
 
 `PyPI` e `npm` são ambos ecossistemas válidos do OSV, com a **mesma** query — é isso que torna o suporte aos dois manifestos barato. (`GET` no OSV devolve 405: o endpoint existe, só exige POST.)
 
@@ -146,8 +148,8 @@ Consequência: o núcleo de resolução de restrições brilha no lado Python. N
 
 ```
 .env.example          # GROQ_API_KEY=        (só o nome, sem valor)
-.gitignore            # .env, __pycache__/, saidas/
-README.md             # critério 3 — escrever na etapa 6
+.gitignore            # .env, *.pdf, __pycache__/, saidas/
+README.md             # critério 3 — escrito incrementalmente, não só no fim (ver seção 12)
 ARQUITETURA.md        # este arquivo
 requirements.txt
 src/
@@ -155,18 +157,19 @@ src/
   parsers.py          # requirements.txt | package.json -> modelo normalizado
   registries.py       # cliente PyPI + cliente npm
   vulns.py            # cliente OSV.dev
-  resolver.py         # núcleo determinístico de restrições
+  resolver.py         # núcleo determinístico de restrições (só PyPI, ver seção 13)
   prompts.py          # prompts do LLM, isolados do fluxo
-  main.py             # CLI: python src/main.py exemplos/requirements.txt
+  main.py             # CLI: python -m src.main exemplos/requirements.txt
 docs/
   prompts.md          # prompts do desenvolvimento (critério 3)
   slides.md           # 2 slides (critério 4)
 exemplos/
   requirements.txt    # deliberadamente bagunçado (fastapi 0.85 + pydantic 1.x)
-  package.json
-  plano-upgrade.md    # saída real, gerada pela execução
+  package.json        # manifesto npm de exemplo
+  plano-upgrade.md    # saída real (PyPI), gerada pela execução
+  plano-upgrade-npm.md # saída real (npm)
 tests/
-  test_agent.py       # entrada malformada + resolução de conflito
+  test_agent.py       # manifesto vazio, linha malformada, 404, conflito real
 ```
 
 O `exemplos/requirements.txt` **precisa** ter conflito de verdade — num projeto limpo o resolvedor não tem o que mostrar e o plano degenera numa lista.
@@ -215,24 +218,25 @@ Separação exigida pelo enunciado (planejar / executar / usar ferramenta / resp
 
 ## 7. Estado compartilhado
 
-O contexto/memória do critério 8 (2,0 pts) é o próprio estado do grafo:
+O contexto/memória do critério 8 (2,0 pts) é o próprio estado do grafo. Schema real (`src/agent.py`):
 
 ```python
-class EstadoUpgrade(TypedDict):
-    caminho: str                      # manifesto de entrada
-    ecossistema: Literal["PyPI", "npm"]
-    dependencias: list[Dependencia]   # declaradas: nome + restrição
-    versoes: dict[str, list[Versao]]  # do registry: versão, data, requires
-    vulns: dict[str, list[Vuln]]      # do OSV
-    plano: list[Upgrade] | None       # do resolvedor: de, para, move_junto
-    riscos: dict[str, Risco]          # do LLM
-    saida: str | None
-    erros: list[str]
+class EstadoUpgrade(TypedDict, total=False):
+    caminho: str                                  # manifesto de entrada
+    ecossistema: Ecossistema                      # "PyPI" | "npm"
+    dependencias: list[Dependencia]                # declaradas: nome + restrição
+    versoes_atuais: dict[str, VersaoPacote]         # versão efetiva de cada dep, com requires_dist
+    infos: dict[str, InfoPacote]                     # todas as versões publicadas + a última
+    vulnerabilidades: dict[str, list[Vulnerabilidade]] # do OSV, só quem tem achado
+    resolucao: ResultadoResolucao                      # grupos, bloqueios, sem_mudanca
+    riscos: dict[str, RiscoItem]                        # do LLM
+    saida_md: str
+    erros: Annotated[list[str], operator.add]            # reducer: cada nó soma, ninguém sobrescreve
 ```
 
-Cada nó devolve **só as chaves que mudou** — o LangGraph faz o merge. Não criar "gerenciador de memória": o estado do grafo já é a memória da execução.
+Cada nó devolve **só as chaves que mudou** — o LangGraph faz o merge. `erros` é a exceção: três nós diferentes (`validar_entrada`, `parsear_manifesto`, `consultar_registry`) podem reportar erro na mesma execução, então o campo usa `Annotated[list[str], operator.add]` — sem isso, o segundo nó que escrevesse `erros` apagaria o do primeiro. Não criar "gerenciador de memória": o estado do grafo já é a memória da execução.
 
-O estado também serve de **cache dentro da execução**: `versoes` é consultado uma vez e reusado pelo resolvedor e pelo avaliador de risco, sem rechamar a API. Isso é uso real de contexto, e vale citar no README.
+O estado também serve de **cache dentro da execução**: `infos`/`versoes_atuais` são consultados uma vez em `consultar_registry` e reusados por `resolver_restricoes` e `gerar_plano`, sem rechamar a API. Isso é uso real de contexto, e está citado no README.
 
 ---
 
@@ -243,10 +247,10 @@ O estado também serve de **cache dentro da execução**: `versoes` é consultad
 | **Entrada** | Arquivo existe, extensão/nome reconhecido, não vazio, tamanho máximo, parseável |
 | **Manifesto** | Linha malformada não derruba a execução — vai para `erros` e o resto segue |
 | **Resposta da API** | Schema Pydantic no retorno de PyPI/npm/OSV — API pode mudar ou devolver 404/429 |
-| **Saída do LLM** | `llm.with_structured_output(Risco)` — se não devolver o schema, cai em `erros` |
+| **Saída do LLM** | `llm.with_structured_output(AvaliacaoRisco)` — sem `GROQ_API_KEY`, cai num fallback "não avaliado" em vez de quebrar |
 | **Ferramenta** | Nome de pacote validado contra regex antes de virar URL (**nunca** interpolar entrada crua em URL) |
 
-Casos para `tests/test_agent.py`: manifesto vazio, linha malformada, pacote inexistente (404), e um conflito real (o resolvedor precisa detectar que `fastapi<0.100` impede `pydantic>=2`). Dois ou três testes bastam — não é para montar suíte.
+`tests/test_agent.py` cobre os quatro casos: manifesto vazio, linha malformada, pacote inexistente (404, único teste que usa rede — pula com `skipTest` se ela faltar) e conflito real (`fastapi==0.85.0` trava `pydantic<2.0.0`, e o resolvedor detecta que a versão mais recente do fastapi já libera pydantic 2.x). Cinco testes ao todo — não virou suíte exaustiva.
 
 ---
 
@@ -282,7 +286,7 @@ Risco:       validators v1 removidos na v2                               [LLM]
 - boto3: existe 1.35, mas seu botocore==1.29 fixado impede
 ```
 
-**A etiqueta de procedência é decisão de design, não enfeite.** Todo fato vem de `[PyPI]`/`[npm]`/`[OSV]`; só o julgamento é `[LLM]`. Isso:
+**A etiqueta de procedência é decisão de design, não enfeite.** Todo fato vem de `[PyPI]`/`[OSV]`; só o julgamento é `[LLM]`. Na implementação real, a etiqueta `[PyPI]` (linhas "Move junto"/"Bloqueados") está hardcoded em `agent.py:_formata_grupo` — hoje isso é correto porque só PyPI alimenta `requires_dist` no resolvedor (seção 13), então essas linhas nunca nascem de dado npm. Se o resolvedor um dia passar a agrupar npm também, a etiqueta precisa virar dinâmica por ecossistema; há um comentário no código marcando esse acoplamento. Isso:
 
 - atende o "geração de saídas verificáveis" que o enunciado pede;
 - deixa a divisão LLM/ferramenta visível no próprio artefato — ótimo para os 2 slides;
