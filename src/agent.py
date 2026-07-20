@@ -199,10 +199,21 @@ def avaliar_risco(state: EstadoUpgrade) -> dict:
     modelo = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
     llm = ChatGroq(model=modelo, temperature=0)
     estruturado = llm.with_structured_output(AvaliacaoRisco)
-    resposta: AvaliacaoRisco = estruturado.invoke([
-        {"role": "system", "content": SISTEMA_AVALIACAO_RISCO},
-        {"role": "user", "content": montar_prompt_risco(itens)},
-    ])
+    try:
+        resposta: AvaliacaoRisco = estruturado.invoke([
+            {"role": "system", "content": SISTEMA_AVALIACAO_RISCO},
+            {"role": "user", "content": montar_prompt_risco(itens)},
+        ])
+    except Exception as exc:
+        # fronteira com provedor externo: rate limit, timeout, ou saída que não
+        # valida contra AvaliacaoRisco — qualquer que seja, o plano não pode
+        # quebrar por causa disso. Mesmo fallback do caso "sem GROQ_API_KEY".
+        riscos = {
+            i["nome"]: RiscoItem(nome=i["nome"], risco="desconhecido", explicacao=f"não avaliado — falha ao consultar o LLM ({exc})")
+            for i in itens
+        }
+        return {"riscos": riscos, "erros": [f"avaliar_risco: falha ao consultar Groq ({exc})"]}
+
     riscos = {item.nome: item for item in resposta.itens}
     return {"riscos": riscos}
 

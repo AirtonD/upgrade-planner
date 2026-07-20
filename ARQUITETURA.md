@@ -247,7 +247,7 @@ O estado também serve de **cache dentro da execução**: `infos`/`versoes_atuai
 | **Entrada** | Arquivo existe, extensão/nome reconhecido, não vazio, tamanho máximo, parseável |
 | **Manifesto** | Linha malformada não derruba a execução — vai para `erros` e o resto segue |
 | **Resposta da API** | Schema Pydantic no retorno de PyPI/npm/OSV — API pode mudar ou devolver 404/429 |
-| **Saída do LLM** | `llm.with_structured_output(AvaliacaoRisco)` — sem `GROQ_API_KEY`, cai num fallback "não avaliado" em vez de quebrar |
+| **Saída do LLM** | `llm.with_structured_output(AvaliacaoRisco)` — dois fallbacks distintos, mesmo resultado ("não avaliado"): sem `GROQ_API_KEY` (nem tenta chamar) e falha na chamada em si (rate limit, timeout, modelo inválido, saída que não valida o schema — `try/except Exception` ao redor do `invoke`). Nenhum dos dois derruba o agente |
 | **Ferramenta** | Nome de pacote validado contra regex antes de virar URL (**nunca** interpolar entrada crua em URL) |
 
 `tests/test_agent.py` cobre os quatro casos: manifesto vazio, linha malformada, pacote inexistente (404, único teste que usa rede — pula com `skipTest` se ela faltar) e conflito real (`fastapi==0.85.0` trava `pydantic<2.0.0`, e o resolvedor detecta que a versão mais recente do fastapi já libera pydantic 2.x). Cinco testes ao todo — não virou suíte exaustiva.
