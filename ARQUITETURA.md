@@ -7,34 +7,13 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 | **Disciplina** | IA para Desenvolvedores [T1] — Mini-Projeto Avaliativo, Módulo 2 |
 | **Formato** | Individual |
 | **LLM** | Groq (`langchain-groq`) |
-| **Entrega** | **20/07/2026** — o corpo do PDF diz 22h, o checklist final diz 15h. **Assumir 15h.** |
-| **Peso** | 30% da nota do módulo (0 a 10 pts) |
 
 ---
 
-## 1. Status da entrega
-
-> **Regra deste documento: nada é entregue com item desmarcado.** Os 8 critérios abaixo somam os 10 pontos. Marcar conforme concluir e manter este bloco atualizado — ele é a fonte da verdade do que falta.
-
-### 1.1. Critérios de avaliação (10,0 pts)
-
-| ✔ | Nº | Critério | Pts | Artefato | Status |
-|---|----|----------|-----|----------|--------|
-| ☐ | 1 | Versionamento com branches e commits semânticos | 1,0 | histórico do repo | Branch por etapa + merge `--no-ff` + commits semânticos, em andamento desde 17/07 |
-| ☐ | 2 | Contribuição individual e produtividade | 1,0 | commits ao longo dos dias | Em andamento — só avaliável no fim |
-| ✔ | 3 | Organização dos arquivos, documentação e prompts | 2,0 | `README.md`, `docs/prompts.md`, `exemplos/` | README.md com exemplos reais dos dois ecossistemas; `tests/test_agent.py` formalizado |
-| ✔ | 4 | Ideia do projeto e apresentação | 1,0 | `docs/slides.md` | 2 slides: problema, agente, entrada, saída, ferramenta, fluxo |
-| ✔ | 5 | Implementação do agente com LangGraph | 1,0 | `src/agent.py` | `StateGraph` implementado, rodado ponta a ponta contra PyPI + OSV.dev reais, incluindo `avaliar_risco` com `GROQ_API_KEY` real |
-| ✔ | 6 | Uso de ferramenta integrada ao agente | 1,0 | `src/registries.py`, `vulns.py`, `resolver.py` | Implementadas, testadas contra API real e integradas ao grafo |
-| ✔ | 7 | Cuidados básicos de segurança | 1,0 | `.gitignore`, `.env.example` | `.env` e `*.pdf` no gitignore desde o 1º commit; nenhum segredo versionado |
-| ✔ | 8 | Contexto, memória e validação básica | 2,0 | estado do grafo + Pydantic | `EstadoUpgrade` (`TypedDict`) implementado com reducer para `erros`; Pydantic em todos os modelos; validação de tamanho de arquivo, nome de pacote, e specifier inválido |
-
-**Onde a nota realmente está:** critérios 3 e 8 valem 2,0 cada. Documentação + validação = **4 dos 10 pontos**. "O agente funciona" (5 e 6) vale 2,0. Capriche no README e nas validações antes de sofisticar o agente.
-
-### 1.2. Checklist final do enunciado (seção 7 do PDF)
+## 1. Status do projeto
 
 **Repositório**
-- [x] Repositório criado no GitHub e acessível → https://github.com/AirtonD/upgrade-planner
+- [x] Repositório no GitHub, organizado e acessível → https://github.com/AirtonD/upgrade-planner
 - [x] Contém o código-fonte do agente
 - [x] Histórico de commits compatível com o desenvolvimento realizado — branch por etapa, merge `--no-ff`
 
@@ -57,17 +36,10 @@ Agente em LangGraph que lê um manifesto de dependências (`requirements.txt` ou
 - [x] README explica como executar
 - [x] README descreve o fluxo LangGraph e a ferramenta
 - [x] README traz exemplo de entrada e saída — saída real, gerada por uma execução de verdade, não fabricada
-- [x] Principais prompts registrados em `.md` → `docs/prompts.md` (atualizar até o fim)
+- [x] Principais prompts registrados em `.md` → `docs/prompts.md`
 
 **Apresentação**
 - [x] Até 2 slides com problema, agente, entrada, saída, ferramenta e fluxo → `docs/slides.md`
-- [x] Submetida via AVA ou versionada no repositório — versionada em `docs/slides.md`
-
-**Submissão**
-- [ ] Link do repositório submetido no AVA
-- [ ] Link testado antes de submeter
-- [ ] Entregue antes de **20/07/2026, 15h**
-- [ ] Não modificar o repositório após a entrega
 
 ---
 
@@ -99,7 +71,7 @@ Isso não é lookup — é priorização sobre um grafo de restrições, com jul
 6. LLM classifica o risco de cada upgrade e ordena as ondas
 7. Escreve o plano
 
-**Por que é um agente e não um script:** o fluxo decide em tempo de execução. Se o parse falhar, nem consulta rede. Se não houver vulnerabilidade nem defasagem, encerra sem gastar LLM. Se houver conflito, entra o resolvedor. A aresta condicional depende do resultado da ferramenta anterior — é controle de fluxo com tomada de decisão, exatamente o que o critério 5 pede.
+**Por que é um agente e não um script:** o fluxo decide em tempo de execução. Se o parse falhar, nem consulta rede. Se não houver vulnerabilidade nem defasagem, encerra sem gastar LLM. Se houver conflito, entra o resolvedor. A aresta condicional depende do resultado da ferramenta anterior — é controle de fluxo com tomada de decisão real, não um pipeline linear disfarçado de grafo.
 
 **Por que não é "coisa que o Copilot já faz":**
 
@@ -149,7 +121,7 @@ Consequência: o núcleo de resolução de restrições brilha no lado Python. N
 ```
 .env.example          # GROQ_API_KEY=        (só o nome, sem valor)
 .gitignore            # .env, *.pdf, __pycache__/, saidas/
-README.md             # critério 3 — escrito incrementalmente, não só no fim (ver seção 12)
+README.md             # escrito incrementalmente ao longo do desenvolvimento, não só no fim
 ARQUITETURA.md        # este arquivo
 requirements.txt
 src/
@@ -161,8 +133,8 @@ src/
   prompts.py          # prompts do LLM, isolados do fluxo
   main.py             # CLI: python -m src.main exemplos/requirements.txt
 docs/
-  prompts.md          # prompts do desenvolvimento (critério 3)
-  slides.md           # 2 slides (critério 4)
+  prompts.md          # prompts do desenvolvimento
+  slides.md           # 2 slides
 exemplos/
   requirements.txt    # deliberadamente bagunçado (fastapi 0.85 + pydantic 1.x)
   package.json        # manifesto npm de exemplo
@@ -208,7 +180,7 @@ flowchart TD
 
 **Duas arestas condicionais, não uma.** Além de "há CVE ou defasagem?", `validar_entrada` e `parsear_manifesto` também podem encerrar cedo (arquivo ausente/vazio/grande demais, ou nenhuma dependência reconhecível) — evita gastar rede e LLM em entrada inválida.
 
-**A aresta condicional depois de `consultar_osv` é o coração do critério 5.** O rubric exige "StateGraph para o controle de fluxo **e tomada de decisão**" — um grafo linear atende só parcialmente. Aqui a decisão é real: sem achado, o agente encerra sem chamar o LLM.
+**A aresta condicional depois de `consultar_osv` é o ponto central do design.** Um `StateGraph` só se justifica se controla fluxo **e** toma decisão — um grafo linear seria só um pipeline disfarçado. Aqui a decisão é real: sem achado, o agente encerra sem chamar o LLM.
 
 **Correção de rota: `gerar_plano` não usa o LLM**, ao contrário do desenho original desta seção. É um template determinístico em Python que monta o markdown a partir do estado (`resolucao`, `vulnerabilidades`, `riscos`) — só a linha `Risco:` de cada item vem do `avaliar_risco`. Um segundo LLM call reescrevendo o plano inteiro arriscaria alucinar um fato (versão, CVE) que o estado já tinha correto; a etiqueta de procedência da seção 9 só funciona se `[PyPI]`/`[OSV]` vierem literalmente do estado, nunca de geração de texto.
 
@@ -218,7 +190,7 @@ Separação exigida pelo enunciado (planejar / executar / usar ferramenta / resp
 
 ## 7. Estado compartilhado
 
-O contexto/memória do critério 8 (2,0 pts) é o próprio estado do grafo. Schema real (`src/agent.py`):
+O contexto/memória do agente é o próprio estado do grafo. Schema real (`src/agent.py`):
 
 ```python
 class EstadoUpgrade(TypedDict, total=False):
@@ -240,7 +212,7 @@ O estado também serve de **cache dentro da execução**: `infos`/`versoes_atuai
 
 ---
 
-## 8. Validação (critério 8 — 2,0 pts)
+## 8. Validação
 
 | Onde | O quê |
 |------|-------|
@@ -296,7 +268,7 @@ O LLM **nunca** inventa número de CVE nem versão: esses campos vêm do estado,
 
 ---
 
-## 10. Segurança (critério 7 — 1,0 pt)
+## 10. Segurança
 
 - `GROQ_API_KEY` **apenas** via `.env` + `python-dotenv`. Nunca no código, nunca em log, nunca na saída.
 - `.env` no `.gitignore` **antes do primeiro commit**. Chave commitada uma vez fica no histórico para sempre — se acontecer, revogar na Groq, não só remover o arquivo.
@@ -308,9 +280,9 @@ O LLM **nunca** inventa número de CVE nem versão: esses campos vêm do estado,
 
 ---
 
-## 11. Fluxo de trabalho no Git (critério 1 — 1,0 pt)
+## 11. Fluxo de trabalho no Git
 
-Projeto individual não exige PR, mas o rubric exige "commits claros, incrementais e alinhados ao padrão de commits semânticos" e branches.
+Projeto individual não exige PR, mas vale manter branches e commits claros, incrementais e alinhados a um padrão semântico — facilita acompanhar a evolução do projeto.
 
 ```
 chore/setup              → .gitignore, .env.example, requirements.txt
@@ -326,28 +298,27 @@ docs/slides              → docs/slides.md
 ```
 
 - Commits semânticos: `feat:`, `fix:`, `docs:`, `test:`, `chore:`, `refactor:`
-- Commits pequenos ao longo dos dias. **Um único commit "projeto pronto" zera o critério 2**, que avalia produtividade rastreável.
+- Commits pequenos ao longo do desenvolvimento, não um único commit final — histórico rastreável facilita entender a evolução do projeto.
 - `.gitignore` no primeiro commit, antes de existir qualquer `.env`.
 
 ---
 
-## 12. Cronograma (3 dias — 17 a 20/07)
+## 12. Ordem de implementação
 
-| # | Etapa | Entrega | ✔ |
-|---|-------|---------|---|
-| 0 | Arquitetura | `ARQUITETURA.md` | [x] |
-| 1 | `chore/setup` | Repo, `.gitignore`, `.env.example`, `requirements.txt` | [x] |
-| 2 | `feat/parser-requirements` | Parse do `requirements.txt` → modelo normalizado | [x] |
-| 3 | `feat/registry-pypi` + `feat/osv` | As duas ferramentas de consulta funcionando | [x] |
-| 4 | `feat/resolver` | Núcleo de restrições + grupos de co-movimento | [x] |
-| 5 | `feat/grafo` | StateGraph ligando tudo, rodando ponta a ponta | [x] |
-| 6 | `feat/parser-package-json` | Suporte a npm | [x] |
-| 7 | `feat/validacao` | Pydantic + `tests/test_agent.py` | [x] |
-| 8 | `docs/readme-e-prompts` | README completo + prompts.md | [x] (escrito ao longo do desenvolvimento, não só no fim) |
-| 9 | `docs/slides` | 2 slides | [x] |
-| 10 | Submissão | Testar link, submeter no AVA, **não mexer mais** | [ ] |
+| # | Etapa | O que entrega |
+|---|-------|---------|
+| 0 | Arquitetura | `ARQUITETURA.md` |
+| 1 | `chore/setup` | Repo, `.gitignore`, `.env.example`, `requirements.txt` |
+| 2 | `feat/parser-requirements` | Parse do `requirements.txt` → modelo normalizado |
+| 3 | `feat/registry-pypi` + `feat/osv` | As duas ferramentas de consulta funcionando |
+| 4 | `feat/resolver` | Núcleo de restrições + grupos de co-movimento |
+| 5 | `feat/grafo` | StateGraph ligando tudo, rodando ponta a ponta |
+| 6 | `feat/parser-package-json` | Suporte a npm |
+| 7 | `feat/validacao` | Pydantic + `tests/test_agent.py` |
+| 8 | `docs/readme-e-prompts` | README completo + prompts.md |
+| 9 | `docs/slides` | 2 slides |
 
-**Ordem realizada, não a original:** README e prompts.md foram escritos incrementalmente desde a etapa 1, não só no fim — mais fácil manter em dia do que reconstruir depois. npm (etapa 6) saiu no prazo, ao contrário do previsto ("primeiro a cair se apertar") — sobrou tempo por ter simplificado o escopo dele desde o início (ver seção 4, assimetria pip×npm), em vez de tentar paridade completa com o lado PyPI.
+README e `prompts.md` foram escritos incrementalmente desde a etapa 1, não só no fim — mais fácil manter em dia do que reconstruir depois. O suporte a npm (etapa 6) saiu mais simples do que o lado PyPI por decisão deliberada de escopo (ver seção 4, assimetria pip×npm), não por falta de tempo.
 
 ---
 
