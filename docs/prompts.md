@@ -96,3 +96,11 @@ conciso, e atualize também a forma de rodar no readme.
 ```
 
 Encontrada e corrigida uma inconsistência real durante a revisão: `ARQUITETURA.md` recomendava `python src/main.py` para rodar o agente — comando que quebraria, já que `main.py` usa import relativo (`from .agent import executar`) e só funciona com `python -m src.main`.
+
+### Segunda leitura do PDF, à procura de lacunas
+
+```
+Analise novamente o pdf e veja se está faltando alguma coisa.
+```
+
+Reler o critério 8 ("validações... evitando o processamento de dados malformados") contra o código expôs uma lacuna real, não só de documentação: `avaliar_risco` tratava a ausência de `GROQ_API_KEY`, mas não tratava falha da chamada em si — rate limit, timeout, ou o modelo devolvendo algo que não valida contra `AvaliacaoRisco`. Sem captura, isso derrubava o agente inteiro no meio de uma demonstração. Corrigido com `try/except` ao redor do `invoke`, caindo no mesmo fallback "não avaliado" do caso sem chave. Testado forçando um `GROQ_MODEL` inválido contra a API real (confirma que degrada, não quebra) e formalizado em `tests/test_agent.py`.

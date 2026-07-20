@@ -47,7 +47,7 @@ Essa tomada de decisão é modelada como aresta condicional no `StateGraph` (ver
 | Cliente OSV.dev | `src/vulns.py` | `POST api.osv.dev/v1/query` — CVEs/GHSAs reais por pacote+versão (mesma query serve PyPI e npm) | ✅ implementado e testado contra a API real |
 | Resolvedor de restrições | `src/resolver.py` | Núcleo determinístico: para cada dependência, calcula a maior versão viável e detecta se outra dependência do manifesto trava essa versão; se travar, testa se subir as duas juntas resolve | ✅ implementado, função pura, testada com fixture. **Só PyPI** alimenta o agrupamento "sobe junto" — ver limitações |
 | Orquestração (`StateGraph`) | `src/agent.py` | Liga as ferramentas acima num grafo LangGraph com estado compartilhado e duas arestas condicionais | ✅ implementado, rodado ponta a ponta contra PyPI + OSV.dev reais |
-| Avaliação de risco | `src/prompts.py` | Prompt isolado do fluxo; LLM (Groq) só classifica risco, nunca escreve fato — sem `GROQ_API_KEY` cai num fallback "não avaliado" em vez de quebrar | ✅ implementado e testado com `GROQ_API_KEY` real |
+| Avaliação de risco | `src/prompts.py` | Prompt isolado do fluxo; LLM (Groq) só classifica risco, nunca escreve fato. Sem `GROQ_API_KEY` **ou** se a chamada falhar (rate limit, timeout, modelo inválido), cai no mesmo fallback "não avaliado" — nunca derruba o agente | ✅ implementado e testado com `GROQ_API_KEY` real, inclusive o caminho de falha |
 | CLI | `src/main.py` | `python -m src.main <manifesto>` → roda o grafo, escreve `saidas/plano-upgrade.md` | ✅ implementado e testado |
 
 Cada ferramenta tem seu próprio self-check (`if __name__ == "__main__":`) — é assim que cada peça foi validada antes de existir o grafo que as liga (comandos na seção "Como executar" abaixo).
