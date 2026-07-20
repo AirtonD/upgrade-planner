@@ -3,6 +3,7 @@
 
 # Material do curso (enunciado), nao faz parte da entrega
 *.pdf
+!Apresentação.pdf
 
 # Saídas geradas pelo agente
 saidas/
