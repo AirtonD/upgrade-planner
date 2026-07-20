@@ -70,37 +70,48 @@ falta, para consultar até a entrega.
 ### Início da implementação
 
 ```
-Certo, comece o desenvolvimento.
+Certo, arquitetura fechada. Comece o desenvolvimento seguindo o cronograma
+do ARQUITETURA.md: setup do repositório primeiro (.gitignore antes de
+qualquer .env existir), depois cada ferramenta em sua própria branch, com
+commit semântico e self-check antes de avançar para a próxima etapa.
 ```
 
 ### Cobrir manifestos sem pin exato
 
 ```
-Uma dúvida antes: a maioria dos requirements.txt tem a versão da lib fixada?
+Antes de seguir, uma dúvida de design: a maioria dos requirements.txt reais
+tem a versão da lib fixada com ==, ou costuma vir com faixa (>=, ~=) ou sem
+versão nenhuma? Se o agente só sugerir upgrade para quem está com pin
+exato, ele pode ficar mudo pra maioria dos projetos reais.
 ```
-
-Levou à correção de `_versao_efetiva`/`_versao_efetiva_npm` em `agent.py`: a versão comparada passou a ser calculada a partir de qualquer restrição do manifesto (`==`, `>=`, `~=`, `^`, `~` ou ausência de restrição), não só pin exato. Sem isso, o agente ficaria mudo para a maioria dos `requirements.txt` reais, que não são gerados por `pip freeze`.
 
 ### Push, segurança e README
 
 ```
-Faça push do que fizemos, mas coloque o pdf no gitignore também, e elabore
-o readme. https://github.com/AirtonD/upgrade-planner.git
+Faça o push de tudo que temos até agora para
+https://github.com/AirtonD/upgrade-planner.git. Antes disso, adicione o PDF
+do enunciado ao .gitignore — é material do curso, não faz parte da entrega.
+E elabore o README.md completo, cobrindo o que o enunciado pede: problema,
+objetivo, fluxo, ferramenta, como executar, exemplos de entrada e saída,
+decisões tomadas e limitações.
 ```
 
 ### Revisão final da documentação
 
 ```
-Quero que revise toda a documentação, readme, veja se está tudo atendendo e
-conciso, e atualize também a forma de rodar no readme.
+Quero que você revise toda a documentação do projeto — README, ARQUITETURA
+e os demais arquivos em docs/. Confira se cada um está atendendo ao que o
+enunciado pede e se o texto está conciso, sem repetição entre seções.
+Aproveite para revisar a seção de como executar o projeto no README,
+garantindo que os comandos estão corretos e completos.
 ```
 
-Encontrada e corrigida uma inconsistência real durante a revisão: `ARQUITETURA.md` recomendava `python src/main.py` para rodar o agente — comando que quebraria, já que `main.py` usa import relativo (`from .agent import executar`) e só funciona com `python -m src.main`.
 
 ### Segunda leitura do PDF, à procura de lacunas
 
 ```
-Analise novamente o pdf e veja se está faltando alguma coisa.
+Releia o PDF do enunciado do zero, com atenção, e compare cada requisito —
+inclusive os critérios de avaliação e o checklist final — contra o estado
+atual do repositório. Quero saber se ficou faltando alguma coisa, mesmo que
+pareça pequena, antes da entrega.
 ```
-
-Reler o critério 8 ("validações... evitando o processamento de dados malformados") contra o código expôs uma lacuna real, não só de documentação: `avaliar_risco` tratava a ausência de `GROQ_API_KEY`, mas não tratava falha da chamada em si — rate limit, timeout, ou o modelo devolvendo algo que não valida contra `AvaliacaoRisco`. Sem captura, isso derrubava o agente inteiro no meio de uma demonstração. Corrigido com `try/except` ao redor do `invoke`, caindo no mesmo fallback "não avaliado" do caso sem chave. Testado forçando um `GROQ_MODEL` inválido contra a API real (confirma que degrada, não quebra) e formalizado em `tests/test_agent.py`.

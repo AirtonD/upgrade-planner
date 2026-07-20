@@ -1,4 +1,4 @@
-# Planejador de Upgrade de Dependências
+# Update Planner - Planejador de Upgrade de Dependências
 
 Agente em **LangGraph** que lê um manifesto de dependências (`requirements.txt` ou `package.json`), cruza dados reais de registry e de vulnerabilidades, e devolve um **plano de upgrade priorizado em ondas** — não uma lista de versões, mas a ordem em que você abriria os PRs.
 
